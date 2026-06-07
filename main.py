@@ -118,6 +118,17 @@ def main():
                 answer = response["answer"]
                 print(f"\nAnswer:\n{answer}")
                 
+                # Extract and format sources
+                context_docs = response.get("context", [])
+                if context_docs:
+                    print("\n📚 Sources:")
+                    for idx, doc in enumerate(context_docs, 1):
+                        source_url = doc.metadata.get("source", "Unknown Source")
+                        title = doc.metadata.get("title", "Document")
+                        snippet = doc.page_content[:150].strip().replace('\n', ' ')
+                        print(f"  [{idx}] {title} - {source_url}")
+                        print(f"      Snippet preview: \"{snippet}...\"")
+                
                 # Append both question and answer to stateful history
                 chat_history.append(HumanMessage(content=query))
                 chat_history.append(AIMessage(content=answer))
