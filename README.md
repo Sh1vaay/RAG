@@ -1,240 +1,239 @@
-# Local RAG System (Retrieval-Augmented Generation)
+# 🌌 Advanced Local Conversational RAG System
 
-[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
-[![Package Manager](https://img.shields.io/badge/dependency%20manager-uv-green.svg)](https://github.com/astral-sh/uv)
-[![Framework](https://img.shields.io/badge/framework-LangChain%20v1.0%2B-orange.svg)](https://github.com/langchain-ai/langchain)
-[![Database](https://img.shields.io/badge/vector%20db-Chroma-red.svg)](https://github.com/chroma-core/chroma)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<div align="center">
 
-An enterprise-ready, locally persisted Retrieval-Augmented Generation (RAG) system built with **LangChain**, **Chroma DB**, and **OpenAI**. This project demonstrates a production-grade directory separation of ingestion pipelines, runtime query engines, and token-cost estimation sandboxes, managed using the ultra-fast Python package manager `uv`.
+![RAG System Header](https://raw.githubusercontent.com/Sh1vaay/RAG/main/header.png)
 
----
+*An enterprise-ready, locally persisted Conversational RAG pipeline built on high-fidelity query optimizations, hybrid search indexes, and local cross-encoder re-ranking.*
 
-## 📋 Table of Contents
+&nbsp;
 
-- [Project Overview](#-project-overview)
-- [Key Features](#-key-features)
-- [Architecture & Data Flow](#-architecture--data-flow)
-  - [System Architecture](#system-architecture)
-  - [Application Flow (Request Lifecycle)](#application-flow-request-lifecycle)
-- [Technology Stack](#-technology-stack)
-- [Developer Experience & Setup](#-developer-experience--setup)
-  - [Prerequisites](#prerequisites)
-  - [Installation & Quick Start](#installation--quick-start)
-  - [Configuration (`.env`)](#configuration-env)
-- [Project Layout](#-project-layout)
-- [Best Practices & Security](#-best-practices--security)
-  - [Security Considerations](#security-considerations)
-  - [Performance Optimizations](#performance-optimizations)
-- [Monitoring & Observability](#-monitoring--observability)
-- [Contributing](#-contributing)
-- [License](#-license)
+[![Python Version](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Package Manager](https://img.shields.io/badge/UV-Package%20Manager-00D2B4?style=for-the-badge&logo=cargo&logoColor=white)](https://github.com/astral-sh/uv)
+[![Framework](https://img.shields.io/badge/LangChain-v1.0%2B-F15A24?style=for-the-badge&logo=chainlink&logoColor=white)](https://github.com/langchain-ai/langchain)
+[![VectorDB](https://img.shields.io/badge/Chroma-DB-FC6D26?style=for-the-badge&logo=databricks&logoColor=white)](https://github.com/chroma-core/chroma)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+
+</div>
 
 ---
 
-## 🔍 Project Overview
-
-The objective of this project is to build a reliable local RAG CLI that extracts semantic knowledge from web sources (specifically Lilian Weng's *LLM-powered Autonomous Agents* article) and serves user queries without re-embedding data during every interaction.
-
-### The Problem
-Traditional LLMs suffer from knowledge cut-off limits and hallucination when asked about proprietary, domain-specific, or recently published data. 
-
-### The Solution
-By using a local Chroma database as a retriever, this system feeds the relevant parts of documents directly into the prompt context for the LLM. This provides:
-* **Accuracy**: Answers strictly grounded in the provided documents.
-* **Cost Efficiency**: Web scraping and embedding creation are run once as an ingestion phase, avoiding costly redundant API calls.
-* **Low Latency**: Retrieve and generate responses using optimized local vector databases.
-
----
-
-## ✨ Key Features
-
-- **Decoupled Architecture**: Ingestion pipeline (`ingest.py`) is completely separated from runtime retrieval/inference (`main.py`).
-- **Disk Persistence**: Vector indices are saved locally in `./chroma_db/`, allowing instant startup and persistent query capabilities.
-- **Cost & Token Auditing**: A sandbox utility (`playground.py`) is included to compute token sizes and test semantic cosine similarity before writing items to disk.
-- **Strict Guardrails**: Input validation alerts users to missing environment keys and empty database directories on launch.
-- **Robust Parsing**: Fine-grained HTML parsing via BeautifulSoup soup strainers to filter out boilerplate elements (footers, navigation menus).
+## 🗺️ Table of Contents
+* [🪐 Project Overview](#-project-overview)
+* [⚡ Key Capabilities](#-key-capabilities)
+* [📈 Architecture & Data Flow](#-architecture--data-flow)
+  * [1. Ingestion Pipeline](#1-data-ingestion-pipeline)
+  * [2. Multi-Query Retrieval & Fusion](#2-multi-query-hybrid-retrieval-pipeline)
+  * [3. Conversational Lifecycle](#3-request-lifecycle--conversational-memory)
+* [📊 Baseline RAG vs. Advanced RAG](#-baseline-rag-vs-advanced-rag)
+* [🛠️ Tech Stack](#️-tech-stack)
+* [🚀 Getting Started](#-getting-started)
+  * [Configuration (`.env`)](#configuration-env)
+  * [Installation](#installation)
+  * [Usage](#usage)
+* [🔒 Security & Optimization](#-security--optimization)
+* [📈 Monitoring](#-monitoring--observability)
+* [📄 License](#-license)
 
 ---
 
-## 📐 Architecture & Data Flow
+## 🪐 Project Overview
 
-### System Architecture
-The following diagram illustrates how the system modules interact with external web pages, database systems, and OpenAI APIs.
+Standard RAG architectures frequently fail when handling multi-format datasets, breaking critical contexts, or failing to identify specific keyword matches. 
 
+This project addresses these challenges by implementing an **offline, high-recall, high-precision retrieval pipeline**. It digests mixed formats (PDFs, CSVs, Word files, Text) locally, divides content using vector-similarity boundaries (Semantic Chunking), translates inputs to bypass poorly phrased queries, and uses a local Cross-Encoder to re-rank the context before generating a final answer.
+
+> [!IMPORTANT]  
+> **Privacy by Design**: All embeddings, databases, and re-ranking calculations are computed **locally**. No document text ever leaves your machine; API calls are strictly limited to LLM inference.
+
+---
+
+## ⚡ Key Capabilities
+
+* 📂 **Multi-Format Processing**: Routes PDFs (`PyPDFLoader`), CSVs (`CSVLoader`), Word files (`Docx2txtLoader`), and text documents directly from a local `./documents` folder.
+* 🧠 **Semantic Sentence Boundaries**: Instead of rigid character-limit splits, the pipeline calculates similarity drift between consecutive sentences to keep related concepts together.
+* 🔍 **Hybrid Query Matching**: Fuses vector similarity (dense search) with term-frequency index scanning (BM25 sparse search) to capture both concepts and exact keywords.
+* 🎯 **Local Cross-Encoder Re-ranking**: Uses `Flashrank` to run local quantized Cross-Encoder scoring to keep only the top 3 most relevant context documents.
+* 💬 **History-Aware Contextualization**: Translates conversational pronouns (e.g. *"What is task decomposition?"* $\rightarrow$ *"Give me an example of it"*) into self-contained search terms.
+* 📚 **Fact-Checking Citations**: Every generated answer is paired with the exact source title, source URL, and a snippet preview.
+
+---
+
+## 📈 Architecture & Diagrams
+
+### 1. Data Ingestion Pipeline
 ```mermaid
-graph TD
-    %% Define components
-    Web[Web Resource: Lilian Weng's Blog] -->|HTML Stream| Ingest[ingest.py: Pipeline]
-    Ingest -->|BeautifulSoup filtering| Chunking[RecursiveCharacterTextSplitter]
-    Chunking -->|Text Splits| Embedder[OpenAIEmbeddings: text-embedding-3-small]
-    Embedder -->|Vectors| LocalChroma[(Local chroma_db/)]
+flowchart TD
+    Start([Start Ingestion]) --> DirCheck{Are there files in ./documents/?}
     
-    User([User CLI]) <-->|Interactive Query Loop| Main[main.py: Query Runtime]
-    Main -->|Semantic Retrieval| LocalChroma
-    LocalChroma -->|Relevant Context Docs| Main
-    Main -->|Formulates Context Prompt| OpenAI[ChatOpenAI: gpt-4o-mini]
-    OpenAI -->|Generated Answer| Main
-    Main -->|Output to CLI| User
+    %% Web Fallback Route
+    DirCheck -->|No| WebLoad[WebBaseLoader: Scraping Lilian Weng Blog]
+    WebLoad --> Parse[BeautifulSoup SoupStrainer: Filter tags]
     
-    %% Style highlights
-    style LocalChroma fill:#f96,stroke:#333,stroke-width:2px
-    style OpenAI fill:#69f,stroke:#333,stroke-width:2px
-    style Ingest fill:#58a45c,stroke:#333,stroke-width:2px
-    style Main fill:#d1a100,stroke:#333,stroke-width:2px
+    %% Directory Route
+    DirCheck -->|Yes| ScanDir[Scan ./documents/*]
+    ScanDir --> Router{File Extension?}
+    Router -->|.pdf| PDF[PyPDFLoader]
+    Router -->|.csv| CSV[CSVLoader]
+    Router -->|.docx| Word[Docx2txtLoader]
+    Router -->|.txt / .md| Text[TextLoader]
+    
+    %% Accumulation & Splitting
+    PDF & CSV & Word & Text --> Accumulate[Accumulate Documents]
+    Parse --> Accumulate
+    
+    Accumulate --> EmbeddingInit[OpenAIEmbeddings: text-embedding-3-small]
+    EmbeddingInit --> Chunking[SemanticChunker: Percentile Thresholds]
+    Chunking --> Splits[Generate Semantic Chunks]
+    
+    %% Persistence
+    Splits --> VectorStoreChroma[(Save to Local ./chroma_db)]
+    VectorStoreChroma --> End([Ingestion Complete])
+    
+    style VectorStoreChroma fill:#ff9900,stroke:#333,stroke-width:2px
+    style Chunking fill:#2ecc71,stroke:#333,stroke-width:2px
+    style Router fill:#3498db,stroke:#333,stroke-width:2px
 ```
 
-### Application Flow (Request Lifecycle)
-The sequence diagram below shows how a single user request traverses the system lifecycle.
+### 2. Multi-Query Hybrid Retrieval Pipeline
+```mermaid
+flowchart TD
+    Input([User Query]) --> ContextChecker[main.py: Validate Env & DB]
+    ContextChecker --> MultiQuery[MultiQueryRetriever: Generate 3 Variations]
+    
+    %% Parallel Retrieval Loop
+    subgraph Parallel Retrieval per Query Variation
+        MultiQuery --> BM25[BM25Retriever: Sparse Keyword Match]
+        MultiQuery --> Vector[ChromaRetriever: Dense Vector Similarity]
+    end
+    
+    BM25 -->|Retrieve top-8| Merger[EnsembleRetriever: Reciprocal Rank Fusion]
+    Vector -->|Retrieve top-8| Merger
+    
+    %% Re-ranking
+    Merger -->|Fused Candidate List| Reranker[FlashrankRerank: Cross-Encoder]
+    Reranker -->|Re-scored & Sorted| TopK[Select Top-3 Documents]
+    
+    %% Prompt Generation
+    TopK --> LLM[ChatOpenAI: gpt-4o-mini]
+    LLM --> Answer([Format Output Answer + Source Citations])
+    
+    style Vector fill:#5dade2,stroke:#333,stroke-width:1px
+    style Reranker fill:#f1c40f,stroke:#333,stroke-width:2px
+    style LLM fill:#e74c3c,stroke:#333,stroke-width:2px
+```
 
+### 3. Request Lifecycle & Conversational Memory
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as Developer/CLI
     participant Main as main.py (Runtime)
-    participant DB as Chroma Database
-    participant OpenAI as OpenAI Chat API
+    participant Hist as Chat History State
+    participant LLM as OpenAI Chat API (gpt-4o-mini)
+    participant Retriever as Multi-Query Hybrid Retriever
 
-    User->>Main: Launch RAG Query Loop
-    Main->>Main: Assert OPENAI_API_KEY is configured
-    Main->>Main: Assert ./chroma_db/ contains indices
-    Note over Main: If validation fails, exit early with helpful message.
-
-    loop Chat Interaction
-        User->>Main: input("Ask a question: ")
-        Main->>DB: Query similarity search (k=3)
-        DB-->>Main: Return top-3 semantic text chunks
-        Main->>Main: Format chunks into Prompt Template
-        Main->>OpenAI: Send prompt (Context + Question)
-        OpenAI-->>Main: Return LLM generation stream/text
-        Main->>User: Display clean answer
+    User->>Main: Launch application
+    Main->>Hist: Initialize chat_history = []
+    
+    loop Conversation Loop
+        User->>Main: Ask question (e.g. "What is task decomposition?")
+        Main->>Retriever: Query with current input & chat_history
+        Note over Retriever: Reformulates query contextually to standalone question.
+        Retriever-->>Main: Return top-3 re-ranked source documents
+        Main->>LLM: Send Context (Docs) + Chat History + Input
+        LLM-->>Main: Return Generated Answer
+        Main->>User: Display Answer + Document Source Citations
+        
+        %% Update memory
+        Main->>Hist: Append HumanMessage(input)
+        Main->>Hist: Append AIMessage(answer)
     end
 ```
 
 ---
 
-## 🛠 Technology Stack
+## 📊 Baseline RAG vs. Advanced RAG
 
-* **Environment & Package Management**: [uv](https://github.com/astral-sh/uv) (built in Rust, fast package resolution)
-* **Core Orchestrator**: [LangChain Core / Community](https://github.com/langchain-ai/langchain) (v1.0+)
-* **Vector Store**: [Chroma DB](https://github.com/chroma-core/chroma)
-* **LLM APIs**: OpenAI (Model: `gpt-4o-mini`)
-* **Embedding Model**: OpenAI (Model: `text-embedding-3-small`)
-* **Scraper & Parser**: BeautifulSoup4 & HTTPX client
-* **Token Math**: `tiktoken` (using `cl100k_base` encoding) & NumPy (for cosine distance)
+| Optimization Stage | Baseline RAG | Advanced RAG (This Project) | Impact |
+| :--- | :--- | :--- | :--- |
+| **Splitting** | Character Count (Fixed) | Semantic Similarity Splitter | Preserves thematic sentences together |
+| **Retrieval** | Semantic Search only | Hybrid Search (Vector + BM25 Keyword) | Doesn't miss exact names/part numbers |
+| **Translation** | Standard Query | Multi-Query Variation Generation | Resolves poorly phrased user questions |
+| **Ordering** | Simple Vector Distance | Local Cross-Encoder Re-scoring | Eliminates context window noise |
+| **Memory** | None (Single Turn) | Stateful Conversational History | Understands context of follow-ups |
 
 ---
 
-## 🚀 Developer Experience & Setup
+## 🛠️ Tech Stack
 
-### Prerequisites
-* Python **3.12 or newer**
-* **uv** package manager installed on your system. Run the installer script if you don't have it:
-  ```bash
-  # Linux / macOS
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  ```
+* **Package Manager**: [uv](https://github.com/astral-sh/uv) (Rust-powered, ultra-fast Python environment sync)
+* **LLM Engine**: OpenAI API (`gpt-4o-mini` & `text-embedding-3-small`)
+* **Vector Store**: [Chroma DB](https://github.com/chroma-core/chroma)
+* **Sparse Index**: [Rank-BM25](https://github.com/dorianbrown/rank_bm25)
+* **Re-ranker Model**: [Flashrank](https://github.com/prithivida/flashrank) (runs locally using ONNX, zero API keys required)
+* **Document Processing**: `pypdf`, `docx2txt`, `beautifulsoup4`, `tiktoken`
 
-### Installation & Quick Start
+---
+
+## 🚀 Getting Started
+
+### Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/rag-project.git
-   cd rag-project
+   git clone https://github.com/Sh1vaay/RAG.git
+   cd RAG
    ```
 
-2. **Synchronize environment and install dependencies:**
-   `uv` automatically installs dependencies from `pyproject.toml` into a local virtual environment:
+2. **Synchronize dependencies:**
+   `uv` automatically configures your virtual environment and locks dependencies:
    ```bash
    uv sync
    ```
 
-3. **Configure Environment Variables:**
-   Create your local `.env` configuration:
-   ```bash
-   cp .env.example .env
-   ```
-   Open the `.env` file and insert your API key:
-   ```ini
-   OPENAI_API_KEY=sk-proj-YOUR_REAL_OPENAI_API_KEY
-   ```
+### Configuration (`.env`)
 
-4. **Verify the math sandbox (Optional):**
-   Execute the playground script to verify token calculations and embedding workflows:
-   ```bash
-   uv run playground.py
-   ```
+Copy the example configuration file:
+```bash
+cp .env.example .env
+```
+Open `.env` and fill in your keys:
+```ini
+OPENAI_API_KEY=sk-proj-YOUR_API_KEY
+```
 
-5. **Run the Ingestion Pipeline:**
-   Build the vector database locally (creates `./chroma_db/` folder):
+### Usage
+
+1. **Populate Documents**: Place your PDFs, Word documents (`.docx`), CSVs, or text files into the `./documents` folder.
+2. **Ingest Data**: Execute the parser and chunking pipeline to build the database:
    ```bash
    uv run ingest.py
    ```
-
-6. **Start Querying the RAG CLI:**
-   Interact with your documentation offline:
+3. **Launch the Chat CLI**: Run the interactive conversational loop:
    ```bash
    uv run main.py
    ```
 
 ---
 
-## 📂 Project Layout
+## 🔒 Security & Optimization
 
-```plaintext
-rag_project/
-│
-├── .env.example        # Reference configurations (Template)
-├── .gitignore          # Safeguards to prevent committing .env and chroma_db
-├── pyproject.toml      # Modern PEP 518/621 project configuration managed by uv
-├── requirements.txt    # Shared dependency list
-│
-├── ingest.py           # Scraping, parsing, chunking, and embedding database pipeline
-├── main.py             # User interface, database retriever load, and generation logic
-├── playground.py       # Helper playground for similarity calculations and token sizes
-└── chroma_db/          # Persistent local directory containing vector indices (Git ignored)
-```
-
----
-
-## 🔒 Best Practices & Security
-
-### Security Considerations
-* **Secrets Exclusion**: The `.gitignore` is pre-configured to block `.env` file check-ins. Never commit secrets to version control.
-* **API Validation**: Scripts fail fast with human-readable guidance when environment credentials are unset or configured with placeholders.
-* **Scoped HTML Parsing**: Scrapers ignore script tags, styling nodes, and navigational headers. This limits prompt injections disguised within web boilerplate.
-
-### Performance Optimizations
-* **Optimized Models**: Embeddings use `text-embedding-3-small` which reduces network payloads and charges less than older models while retaining high semantic accuracy.
-* **Token Boundaries**: The chunk size is bounded to 300 tokens using `RecursiveCharacterTextSplitter.from_tiktoken_encoder`, preventing context window overflow.
-* **Local Caching**: The application avoids expensive HTTP lookups on startup; all retrievals query the locally persisted sqlite/parquet storage in `./chroma_db`.
+* **Secrets Management**: Built-in protections inside `.gitignore` ensure `.env` and local database binary caches (`chroma_db/`) are blocked from version control.
+* **Token Boundaries**: Semantic chunking breaks text without exceeding context-window limits, preventing model truncation and context cost bloat.
+* **Fast Startup**: Hybrid search indexes are serialized and loaded from disk locally, bypassing repeated document scraping.
 
 ---
 
 ## 📈 Monitoring & Observability
 
-This project includes built-in hooks for **LangSmith**, providing observability and tracing into prompt pipelines, model latency, token usage, and retrieval scoring.
+This project includes integrations with **LangSmith** to inspect prompts, retrieval steps, latencies, and token costs:
 
-To enable full application tracing:
-1. Register for an account at [smith.langchain.com](https://smith.langchain.com/).
-2. Enable tracing in your `.env`:
-   ```ini
-   LANGCHAIN_TRACING_V2=true
-   LANGCHAIN_API_KEY=ls__YOUR_LANGSMITH_API_KEY
-   LANGCHAIN_PROJECT="rag-local-assistant"
-   ```
-3. Run `main.py` queries. All runs, token usage, and traces will be logged in your LangSmith dashboard automatically.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-1. Fork this repository.
-2. Create a feature branch: `git checkout -b feature/amazing-feature`.
-3. Commit your changes: `git commit -m 'Add some amazing feature'`.
-4. Push to the branch: `git push origin feature/amazing-feature`.
-5. Submit a Pull Request.
+```ini
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=ls__YOUR_LANGSMITH_API_KEY
+LANGCHAIN_PROJECT="rag-local-assistant"
+```
 
 ---
 
