@@ -7,6 +7,9 @@ from langchain.chains import create_history_aware_retriever, create_retrieval_ch
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
+from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriever
+from langchain_community.retrievers import BM25Retriever
+from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
 
 # Load environment variables
 load_dotenv()
@@ -38,13 +41,54 @@ def main():
         print(f"[ERROR] Failed to load vector database: {e}", file=sys.stderr)
         return
     
-    # 3. Setup retriever
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    # 3. Setup Keyword (BM25) and Semantic (Chroma) Retrievers
+    print("Initializing hybrid retrieval (BM25 + Chroma)...")
+    try:
+        # Extract all documents currently persisted inside the vector store to seed the BM25 index
+        raw_db_data = vectorstore.get()
+        documents = []
+        if raw_db_data and "documents" in raw_db_data:
+            from langchain_core.documents import Document
+            for text, meta in zip(raw_db_data["documents"], raw_db_data["metadatas"]):
+                documents.append(Document(page_content=text, metadata=meta))
+        
+        if not documents:
+            raise ValueError("No documents loaded from vector store database to build BM25 search index.")
 
-    # 4. Setup LLM
+        # Initialize keyword search on exact document contents
+        bm25_retriever = BM25Retriever.from_documents(documents)
+        # Retrieve a broader pool of candidates (k=8) to allow the reranker to prune
+        bm25_retriever.k = 8
+
+        # Initialize semantic/vector search (k=8)
+        vector_retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
+
+        # Combine retrievers using Reciprocal Rank Fusion (RRF)
+        ensemble_retriever = EnsembleRetriever(
+            retrievers=[bm25_retriever, vector_retriever],
+            weights=[0.5, 0.5]
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to build hybrid retriever: {e}", file=sys.stderr)
+        return
+
+    # 4. Setup Local Cross-Encoder Reranker (Flashrank)
+    print("Initializing local Cross-Encoder reranking (Flashrank)...")
+    try:
+        # Setup Flashrank compressor to re-rank the hybrid candidates, outputting only the top 3
+        compressor = FlashrankRerank(top_n=3)
+        compression_retriever = ContextualCompressionRetriever(
+            base_compressor=compressor, 
+            base_retriever=ensemble_retriever
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to initialize Flashrank reranker: {e}", file=sys.stderr)
+        return
+
+    # 5. Setup LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-    # 5. Define Prompts for Conversational Flow
+    # 6. Define Prompts for Conversational Flow
     
     # Prompt to reformulate follow-up questions to be standalone
     contextualize_q_system_prompt = (
@@ -71,11 +115,11 @@ def main():
         ("human", "{input}"),
     ])
 
-    # 6. Build the Chains
+    # 7. Build the Chains
     
-    # Create retriever that takes history into account
+    # Create retriever that takes history into account and pipes to reranked hybrid search
     history_aware_retriever = create_history_aware_retriever(
-        llm, retriever, contextualize_q_prompt
+        llm, compression_retriever, contextualize_q_prompt
     )
 
     # Create QA chain that combines retrieved documents
@@ -87,9 +131,10 @@ def main():
     # Initialize in-memory session chat history
     chat_history = []
 
-    # 7. Execution Loop
+    # 8. Execution Loop
     print("\n=======================================================")
-    print("🚀 Conversational RAG System Ready. Type 'exit' or 'quit' to close.")
+    print("🚀 Hybrid RAG System with Reranking Ready.")
+    print("Type 'exit' or 'quit' to close.")
     print("=======================================================")
     
     try:
@@ -109,7 +154,7 @@ def main():
                 
             print("Thinking...")
             try:
-                # Invoke conversational RAG chain
+                # Invoke conversational hybrid RAG chain
                 response = rag_chain.invoke({
                     "input": query, 
                     "chat_history": chat_history
@@ -118,10 +163,10 @@ def main():
                 answer = response["answer"]
                 print(f"\nAnswer:\n{answer}")
                 
-                # Extract and format sources
+                # Extract and format sources (post-reranked top-3)
                 context_docs = response.get("context", [])
                 if context_docs:
-                    print("\n📚 Sources:")
+                    print("\n📚 Top Sources (Re-ranked):")
                     for idx, doc in enumerate(context_docs, 1):
                         source_url = doc.metadata.get("source", "Unknown Source")
                         title = doc.metadata.get("title", "Document")

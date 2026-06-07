@@ -11,3 +11,5 @@ numpy
 pypdf
 docx2txt
 langchain-experimental
+rank-bm25
+flashrank
