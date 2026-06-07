@@ -10,7 +10,7 @@ from langchain_community.document_loaders import (
     Docx2txtLoader,
     TextLoader
 )
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 
@@ -89,19 +89,19 @@ def ingest_data():
         print("[ERROR] No documents loaded. Exiting.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Splitting documents (Loaded {len(docs)} pages/documents)...")
-    text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-        chunk_size=300, 
-        chunk_overlap=50
-    )
-    splits = text_splitter.split_documents(docs)
-    print(f"Created {len(splits)} text chunks.")
+    print(f"Splitting documents (Loaded {len(docs)} pages/documents) using Semantic Chunker...")
+    try:
+        # Explicitly set the embedding model to ensure stability and calculate similarity thresholds
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        text_splitter = SemanticChunker(embeddings, breakpoint_threshold_type="percentile")
+        splits = text_splitter.split_documents(docs)
+        print(f"Created {len(splits)} semantic text chunks.")
+    except Exception as e:
+        print(f"[ERROR] Failed to split documents semantically: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print("Embedding and saving to Chroma database...")
     try:
-        # Explicitly set the embedding model to ensure stability and cost control
-        embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-        
         # Initialize Chroma with a persist directory to save data locally
         Chroma.from_documents(
             documents=splits, 

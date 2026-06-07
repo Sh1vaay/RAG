@@ -10,3 +10,4 @@ python-dotenv
 numpy
 pypdf
 docx2txt
+langchain-experimental
