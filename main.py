@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
+from langchain.retrievers.multi_query import MultiQueryRetriever
 
 # Load environment variables
 load_dotenv()
@@ -88,7 +89,19 @@ def main():
     # 5. Setup LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-    # 6. Define Prompts for Conversational Flow
+    # 6. Setup Multi-Query Retriever (Broad Search Translation)
+    print("Initializing Multi-Query translation...")
+    try:
+        # Wrap the compression retriever to search the database using multiple generated query phrasings
+        multiquery_retriever = MultiQueryRetriever.from_llm(
+            retriever=compression_retriever,
+            llm=llm
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed to initialize Multi-Query retriever: {e}", file=sys.stderr)
+        return
+
+    # 7. Define Prompts for Conversational Flow
     
     # Prompt to reformulate follow-up questions to be standalone
     contextualize_q_system_prompt = (
@@ -115,11 +128,11 @@ def main():
         ("human", "{input}"),
     ])
 
-    # 7. Build the Chains
+    # 8. Build the Chains
     
-    # Create retriever that takes history into account and pipes to reranked hybrid search
+    # Create retriever that takes history into account and pipes to the multi-query, reranked hybrid retriever
     history_aware_retriever = create_history_aware_retriever(
-        llm, compression_retriever, contextualize_q_prompt
+        llm, multiquery_retriever, contextualize_q_prompt
     )
 
     # Create QA chain that combines retrieved documents
@@ -131,9 +144,9 @@ def main():
     # Initialize in-memory session chat history
     chat_history = []
 
-    # 8. Execution Loop
+    # 9. Execution Loop
     print("\n=======================================================")
-    print("🚀 Hybrid RAG System with Reranking Ready.")
+    print("🚀 Conversational Multi-Query Hybrid RAG Ready.")
     print("Type 'exit' or 'quit' to close.")
     print("=======================================================")
     
@@ -154,7 +167,7 @@ def main():
                 
             print("Thinking...")
             try:
-                # Invoke conversational hybrid RAG chain
+                # Invoke conversational multi-query RAG chain
                 response = rag_chain.invoke({
                     "input": query, 
                     "chat_history": chat_history
@@ -163,10 +176,10 @@ def main():
                 answer = response["answer"]
                 print(f"\nAnswer:\n{answer}")
                 
-                # Extract and format sources (post-reranked top-3)
+                # Extract and format sources (post-reranked and de-duplicated)
                 context_docs = response.get("context", [])
                 if context_docs:
-                    print("\n📚 Top Sources (Re-ranked):")
+                    print("\n📚 Top Sources (De-duplicated & Re-ranked):")
                     for idx, doc in enumerate(context_docs, 1):
                         source_url = doc.metadata.get("source", "Unknown Source")
                         title = doc.metadata.get("title", "Document")
