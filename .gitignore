@@ -1,0 +1,35 @@
+# Python build and cache artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Environment configurations and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Local Database & Storage
+chroma_db/
+.chroma/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Specific Files
+.DS_Store
+Thumbs.db
