@@ -8,3 +8,5 @@ beautifulsoup4
 tiktoken
 python-dotenv
 numpy
+pypdf
+docx2txt

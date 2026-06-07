@@ -1,14 +1,42 @@
 import os
 import sys
+import glob
 import bs4
 from dotenv import load_dotenv
-from langchain_community.document_loaders import WebBaseLoader
+from langchain_community.document_loaders import (
+    WebBaseLoader,
+    PyPDFLoader,
+    CSVLoader,
+    Docx2txtLoader,
+    TextLoader
+)
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 
 # Load environment variables from .env file
 load_dotenv()
+
+def load_single_document(file_path: str):
+    """Loads a single document based on its file extension using LangChain loaders."""
+    ext = os.path.splitext(file_path)[-1].lower()
+    if ext == ".pdf":
+        loader = PyPDFLoader(file_path)
+    elif ext == ".csv":
+        loader = CSVLoader(file_path)
+    elif ext == ".docx":
+        loader = Docx2txtLoader(file_path)
+    elif ext == ".txt" or ext == ".md":
+        loader = TextLoader(file_path, encoding="utf-8")
+    else:
+        print(f"[WARNING] Unsupported file type: {file_path}. Skipping.")
+        return []
+    
+    try:
+        return loader.load()
+    except Exception as e:
+        print(f"[ERROR] Failed to load {file_path}: {e}", file=sys.stderr)
+        return []
 
 def ingest_data():
     # 1. Validation
@@ -18,25 +46,50 @@ def ingest_data():
         print("Please set your OpenAI API key in the .env file before running ingest.py.", file=sys.stderr)
         sys.exit(1)
 
-    print("Loading documents...")
-    target_url = "https://lilianweng.github.io/posts/2023-06-23-agent/"
-    try:
-        loader = WebBaseLoader(
-            web_paths=(target_url,),
-            bs_kwargs=dict(
-                parse_only=bs4.SoupStrainer(
-                    class_=("post-content", "post-title", "post-header")
-                )
-            ),
-        )
-        docs = loader.load()
-        if not docs:
-            raise ValueError(f"No content loaded from the URL: {target_url}")
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch or parse document from {target_url}: {e}", file=sys.stderr)
+    documents_dir = "./documents"
+    if not os.path.exists(documents_dir):
+        os.makedirs(documents_dir)
+        print(f"Created directory: {documents_dir}")
+
+    # Find all matching files in documents_dir
+    files = []
+    for ext in ("*.pdf", "*.csv", "*.docx", "*.txt", "*.md"):
+        files.extend(glob.glob(os.path.join(documents_dir, ext)))
+        files.extend(glob.glob(os.path.join(documents_dir, ext.upper())))
+    
+    # Remove duplicates from glob casing match
+    files = sorted(list(set(files)))
+
+    docs = []
+    if files:
+        print(f"Found {len(files)} document(s) in '{documents_dir}'. Loading...")
+        for file_path in files:
+            print(f"  Loading {os.path.basename(file_path)}...")
+            docs.extend(load_single_document(file_path))
+    else:
+        # Fallback to loading the Weng blog post
+        print(f"No documents found in '{documents_dir}'.")
+        print("Falling back to loading default web resource...")
+        target_url = "https://lilianweng.github.io/posts/2023-06-23-agent/"
+        try:
+            loader = WebBaseLoader(
+                web_paths=(target_url,),
+                bs_kwargs=dict(
+                    parse_only=bs4.SoupStrainer(
+                        class_=("post-content", "post-title", "post-header")
+                    )
+                ),
+            )
+            docs = loader.load()
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch or parse web document from {target_url}: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    if not docs:
+        print("[ERROR] No documents loaded. Exiting.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Splitting documents (Loaded {len(docs)} document(s))...")
+    print(f"Splitting documents (Loaded {len(docs)} pages/documents)...")
     text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
         chunk_size=300, 
         chunk_overlap=50
