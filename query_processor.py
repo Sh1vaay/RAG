@@ -196,11 +196,8 @@ class RoutingRetriever(BaseRetriever):
         if self.routing_method == "semantic" and self._semantic_router is None:
             self._semantic_router = SemanticRouter(self.embeddings)
 
-    def _get_relevant_documents(
-        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
-    ) -> List[Document]:
-        
-        # 1. Execute Selected Routing Strategy
+    def determine_route(self, query: str) -> Tuple[str, float]:
+        """Classifies the query intent to select the translation route."""
         if self.routing_method == "llm":
             # Invoke LLM structured router
             router_chain = ROUTER_PROMPT | self.llm.with_structured_output(RouteSelection)
@@ -218,7 +215,7 @@ class RoutingRetriever(BaseRetriever):
             print(f"🔮 [LLM ROUTER] Selected Route: {route.upper()}")
             print(f"💬 [Reasoning] {reason}")
             print("="*65 + "\n")
-
+            return route, 1.0
         else:
             # Default: Embedding Semantic Router
             if self._semantic_router is None:
@@ -235,8 +232,10 @@ class RoutingRetriever(BaseRetriever):
             print(f"🔮 [SEMANTIC ROUTER] Selected Route: {route.upper()}")
             print(f"🎯 [Confidence Score] {score:.4f}")
             print("="*65 + "\n")
+            return route, score
 
-        # 2. Execute selected translation logic
+    def retrieve_for_route(self, query: str, route: str) -> List[Document]:
+        """Runs the translation strategy logic and retrieves source documents."""
         if route == "hyde":
             hyde_chain = HYDE_PROMPT | self.llm
             try:
@@ -260,6 +259,7 @@ class RoutingRetriever(BaseRetriever):
                 return self.base_retriever.invoke(query)
 
         elif route == "decomposition":
+            # Direct/naive retrieval fallback
             dec_chain = DECOMPOSITION_PROMPT | self.llm
             try:
                 sub_q_text = dec_chain.invoke({"question": query}).content.strip()
@@ -316,3 +316,9 @@ class RoutingRetriever(BaseRetriever):
         else:
             print(f"⚡ [Direct Route]: Standard query lookup.\n")
             return self.base_retriever.invoke(query)
+
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> List[Document]:
+        route, _ = self.determine_route(query)
+        return self.retrieve_for_route(query, route)

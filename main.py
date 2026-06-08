@@ -173,27 +173,69 @@ def main():
                 
             print("Thinking...")
             try:
-                # Invoke conversational multi-query RAG chain
-                response = rag_chain.invoke({
-                    "input": query, 
-                    "chat_history": chat_history
-                })
+                # 1. Contextualize query if history exists
+                if chat_history:
+                    contextualize_chain = contextualize_q_prompt | llm
+                    standalone_q = contextualize_chain.invoke({
+                        "input": query,
+                        "chat_history": chat_history
+                    }).content.strip()
+                else:
+                    standalone_q = query
                 
-                answer = response["answer"]
+                # 2. Determine Route
+                route, _ = routing_retriever.determine_route(standalone_q)
+                
+                # 3. Execute Route
+                if route == "decomposition":
+                    from decomposition_graph import create_decomposition_graph
+                    # Build and execute the cyclic LangGraph decomposition agent
+                    graph = create_decomposition_graph(compression_retriever, llm)
+                    
+                    state = graph.invoke({
+                        "main_question": standalone_q,
+                        "sub_questions": [],
+                        "current_index": 0,
+                        "sub_answers": [],
+                        "retrieved_docs": [],
+                        "final_answer": ""
+                    })
+                    
+                    answer = state["final_answer"]
+                    context_docs = state["retrieved_docs"]
+                else:
+                    # Retrieve documents using chosen translation strategy
+                    context_docs = routing_retriever.retrieve_for_route(standalone_q, route)
+                    
+                    # Generate final answer using context
+                    answer = question_answer_chain.invoke({
+                        "context": context_docs,
+                        "input": standalone_q,
+                        "chat_history": chat_history
+                    })
+                
+                # 4. Display Output
                 print(f"\nAnswer:\n{answer}")
                 
-                # Extract and format sources (post-reranked and de-duplicated)
-                context_docs = response.get("context", [])
                 if context_docs:
                     print("\n📚 Top Sources (De-duplicated & Re-ranked):")
-                    for idx, doc in enumerate(context_docs, 1):
+                    # De-duplicate context docs for print preview
+                    seen_sources = set()
+                    unique_sources = []
+                    for doc in context_docs:
+                        key = (doc.page_content[:100], doc.metadata.get("source", ""))
+                        if key not in seen_sources:
+                            seen_sources.add(key)
+                            unique_sources.append(doc)
+                            
+                    for idx, doc in enumerate(unique_sources[:5], 1):
                         source_url = doc.metadata.get("source", "Unknown Source")
                         title = doc.metadata.get("title", "Document")
                         snippet = doc.page_content[:150].strip().replace('\n', ' ')
                         print(f"  [{idx}] {title} - {source_url}")
                         print(f"      Snippet preview: \"{snippet}...\"")
                 
-                # Append both question and answer to stateful history
+                # 5. Update Conversation History
                 chat_history.append(HumanMessage(content=query))
                 chat_history.append(AIMessage(content=answer))
                 

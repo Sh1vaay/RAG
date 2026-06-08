@@ -13,3 +13,4 @@ docx2txt
 langchain-experimental
 rank-bm25
 flashrank
+langgraph
