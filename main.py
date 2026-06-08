@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
-from langchain.retrievers.multi_query import MultiQueryRetriever
+from query_processor import RoutingRetriever
 
 # Load environment variables
 load_dotenv()
@@ -89,16 +89,15 @@ def main():
     # 5. Setup LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-    # 6. Setup Multi-Query Retriever (Broad Search Translation)
-    print("Initializing Multi-Query translation...")
+    # 6. Setup Routing Retriever (Dynamic Translation Router)
+    print("Initializing Dynamic Query Translation Router...")
     try:
-        # Wrap the compression retriever to search the database using multiple generated query phrasings
-        multiquery_retriever = MultiQueryRetriever.from_llm(
-            retriever=compression_retriever,
+        routing_retriever = RoutingRetriever(
+            base_retriever=compression_retriever,
             llm=llm
         )
     except Exception as e:
-        print(f"[ERROR] Failed to initialize Multi-Query retriever: {e}", file=sys.stderr)
+        print(f"[ERROR] Failed to initialize Routing Retriever: {e}", file=sys.stderr)
         return
 
     # 7. Define Prompts for Conversational Flow
@@ -130,9 +129,9 @@ def main():
 
     # 8. Build the Chains
     
-    # Create retriever that takes history into account and pipes to the multi-query, reranked hybrid retriever
+    # Create retriever that takes history into account and pipes to the routed hybrid retriever
     history_aware_retriever = create_history_aware_retriever(
-        llm, multiquery_retriever, contextualize_q_prompt
+        llm, routing_retriever, contextualize_q_prompt
     )
 
     # Create QA chain that combines retrieved documents

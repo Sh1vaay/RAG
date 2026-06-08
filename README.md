@@ -51,8 +51,10 @@ This project addresses these challenges by implementing an **offline, high-recal
 ## ⚡ Key Capabilities
 
 * 📂 **Multi-Format Processing**: Routes PDFs (`PyPDFLoader`), CSVs (`CSVLoader`), Word files (`Docx2txtLoader`), and text documents directly from a local `./documents` folder.
-* 🧠 **Semantic Sentence Boundaries**: Instead of rigid character-limit splits, the pipeline calculates similarity drift between consecutive sentences to keep related concepts together.
+* 🔮 **Intelligent Query Router**: An LLM-based structured classifier that dynamically routes incoming questions to the optimal translation technique (HyDE, Step-Back, Decomposition, RAG-Fusion, Multi-Query, or Standard retrieval) based on query style.
+* 🧠 **Semantic Chunking**: Instead of static character-limit splits, the pipeline calculates similarity drift between consecutive sentences to keep related concepts together.
 * 🔍 **Hybrid Query Matching**: Fuses vector similarity (dense search) with term-frequency index scanning (BM25 sparse search) to capture both concepts and exact keywords.
+* ⚡ **Parallel Retrieval Execution**: Runs sub-queries concurrently via a Python ThreadPool executor to ensure near-zero latency overhead for multi-query strategies.
 * 🎯 **Local Cross-Encoder Re-ranking**: Uses `Flashrank` to run local quantized Cross-Encoder scoring to keep only the top 3 most relevant context documents.
 * 💬 **History-Aware Contextualization**: Translates conversational pronouns (e.g. *"What is task decomposition?"* $\rightarrow$ *"Give me an example of it"*) into self-contained search terms.
 * 📚 **Fact-Checking Citations**: Every generated answer is paired with the exact source title, source URL, and a snippet preview.
@@ -173,6 +175,27 @@ sequenceDiagram
 * **Sparse Index**: [Rank-BM25](https://github.com/dorianbrown/rank_bm25)
 * **Re-ranker Model**: [Flashrank](https://github.com/prithivida/flashrank) (runs locally using ONNX, zero API keys required)
 * **Document Processing**: `pypdf`, `docx2txt`, `beautifulsoup4`, `tiktoken`
+
+---
+
+## 📂 Project Layout
+
+```plaintext
+rag_project/
+│
+├── .env.example        # Reference configurations (Template)
+├── .gitignore          # Safeguards to prevent committing .env and chroma_db
+├── pyproject.toml      # Modern PEP 518/621 project configuration managed by uv
+├── requirements.txt    # Shared dependency list
+│
+├── ingest.py           # Scraping, parsing, chunking, and embedding database pipeline
+├── query_processor.py  # Dynamic routing engine with all 5 query translation techniques
+├── main.py             # User interface, database retriever load, and generation logic
+├── playground.py       # Helper playground for similarity calculations and token sizes
+│
+├── documents/          # Directory where local PDFs, CSVs, and Word files are placed
+└── chroma_db/          # Persistent local directory containing vector indices (Git ignored)
+```
 
 ---
 
