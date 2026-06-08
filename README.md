@@ -51,7 +51,7 @@ This project addresses these challenges by implementing an **offline, high-recal
 ## ⚡ Key Capabilities
 
 * 📂 **Multi-Format Processing**: Routes PDFs (`PyPDFLoader`), CSVs (`CSVLoader`), Word files (`Docx2txtLoader`), and text documents directly from a local `./documents` folder.
-* 🔮 **Intelligent Query Router**: An LLM-based structured classifier that dynamically routes incoming questions to the optimal translation technique (HyDE, Step-Back, Decomposition, RAG-Fusion, Multi-Query, or Standard retrieval) based on query style.
+* 🔮 **Configurable Dual-Routing Engine**: Supports both a millisecond-level embedding-based **Semantic Router** (zero LLM token cost) and a structured **LLM Router** (with reasoning tags), dynamically directing questions to the optimal translation technique (HyDE, Step-Back, Decomposition, RAG-Fusion, Multi-Query, or Standard retrieval).
 * 🧠 **Semantic Chunking**: Instead of static character-limit splits, the pipeline calculates similarity drift between consecutive sentences to keep related concepts together.
 * 🔍 **Hybrid Query Matching**: Fuses vector similarity (dense search) with term-frequency index scanning (BM25 sparse search) to capture both concepts and exact keywords.
 * ⚡ **Parallel Retrieval Execution**: Runs sub-queries concurrently via a Python ThreadPool executor to ensure near-zero latency overhead for multi-query strategies.
@@ -221,9 +221,12 @@ Copy the example configuration file:
 ```bash
 cp .env.example .env
 ```
-Open `.env` and fill in your keys:
+Open `.env` and configure your settings:
 ```ini
 OPENAI_API_KEY=sk-proj-YOUR_API_KEY
+
+# Routing configuration: 'semantic' (Fast/Free similarity matching) or 'llm' (Structured reasoning)
+ROUTING_METHOD=semantic
 ```
 
 ### Usage

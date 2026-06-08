@@ -92,10 +92,17 @@ def main():
     # 6. Setup Routing Retriever (Dynamic Translation Router)
     print("Initializing Dynamic Query Translation Router...")
     try:
+        routing_method = os.getenv("ROUTING_METHOD", "semantic").strip().lower()
+        if routing_method not in ("semantic", "llm"):
+            routing_method = "semantic"
+            
         routing_retriever = RoutingRetriever(
             base_retriever=compression_retriever,
-            llm=llm
+            llm=llm,
+            embeddings=embeddings,
+            routing_method=routing_method
         )
+        routing_retriever.initialize_router()
     except Exception as e:
         print(f"[ERROR] Failed to initialize Routing Retriever: {e}", file=sys.stderr)
         return
