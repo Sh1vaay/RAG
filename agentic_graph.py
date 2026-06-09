@@ -32,6 +32,7 @@ class AgenticState(TypedDict):
     relevant_docs: List[Document]
     answer: str
     reflection_passed: bool
+    answer_relevant: bool
     retry_count: int
 
 
@@ -77,6 +78,16 @@ _REFLECT_PROMPT = ChatPromptTemplate.from_messages([
     ("human", "Answer:\n{answer}\n\nSource Documents:\n{context}"),
 ])
 
+_ANSWER_GRADE_PROMPT = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        "You are an answer relevance grader. Given a user question and a generated answer, "
+        "decide if the answer actually addresses (answers) the original question directly.\n"
+        "Reply with exactly one word: 'yes' or 'no'. No other text.",
+    ),
+    ("human", "User Question: {question}\n\nGenerated Answer:\n{answer}"),
+])
+
 
 # ── Graph Factory ─────────────────────────────────────────────────────────────
 
@@ -92,10 +103,11 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
         The shared gpt-4o-mini instance from main.py.
     """
 
-    grade_chain   = _GRADE_PROMPT   | llm
-    rewrite_chain = _REWRITE_PROMPT | llm
-    gen_chain     = _GENERATE_PROMPT | llm
-    reflect_chain = _REFLECT_PROMPT  | llm
+    grade_chain        = _GRADE_PROMPT        | llm
+    rewrite_chain      = _REWRITE_PROMPT      | llm
+    gen_chain          = _GENERATE_PROMPT     | llm
+    reflect_chain      = _REFLECT_PROMPT      | llm
+    answer_grade_chain = _ANSWER_GRADE_PROMPT | llm
 
     # ── Nodes ─────────────────────────────────────────────────────────────────
 
@@ -189,6 +201,24 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
             "retry_count": state.get("retry_count", 0) + (0 if passed else 1),
         }
 
+    def grade_answer(state: AgenticState) -> dict:
+        print("⚖️  [Agentic: Grade Answer Relevance]")
+        question = state["question"]
+        answer = state["answer"]
+        try:
+            verdict = answer_grade_chain.invoke({
+                "question": question,
+                "answer": answer,
+            }).content.strip().lower()
+        except Exception:
+            verdict = "yes"  # assume relevant on error
+        passed = verdict == "yes"
+        print(f"   Answer relevance verdict: {'✅ addresses question' if passed else '⚠️  does not address question'}")
+        return {
+            "answer_relevant": passed,
+            "retry_count": state.get("retry_count", 0) + (0 if passed else 1),
+        }
+
     # ── Routing Conditions ────────────────────────────────────────────────────
 
     def after_grade(state: AgenticState) -> str:
@@ -198,12 +228,21 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
 
     def after_reflect(state: AgenticState) -> str:
         if state["reflection_passed"]:
-            return END
+            return "grade_answer"
         # Avoid infinite loops — max 2 reflection retries
         if state.get("retry_count", 0) >= 2:
             print("   ⚠️  Max retries reached. Returning best available answer.")
             return END
         return "generate"
+
+    def after_grade_answer(state: AgenticState) -> str:
+        if state["answer_relevant"]:
+            return END
+        # Avoid infinite loops
+        if state.get("retry_count", 0) >= 2:
+            print("   ⚠️  Max retries reached. Returning best available answer.")
+            return END
+        return "rewrite_query"
 
     # ── Build Graph ───────────────────────────────────────────────────────────
 
@@ -214,6 +253,7 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
     workflow.add_node("web_search",     web_search)
     workflow.add_node("generate",       generate)
     workflow.add_node("reflect",        reflect)
+    workflow.add_node("grade_answer",   grade_answer)
 
     workflow.set_entry_point("retrieve")
     workflow.add_edge("retrieve", "grade_documents")
@@ -228,8 +268,14 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
     workflow.add_conditional_edges(
         "reflect",
         after_reflect,
-        {"generate": "generate", END: END},
+        {"generate": "generate", "grade_answer": "grade_answer", END: END},
+    )
+    workflow.add_conditional_edges(
+        "grade_answer",
+        after_grade_answer,
+        {"rewrite_query": "rewrite_query", END: END},
     )
 
     return workflow.compile()
+
 

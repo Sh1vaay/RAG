@@ -304,6 +304,7 @@ def main():
                         "relevant_docs": [],
                         "answer": "",
                         "reflection_passed": False,
+                        "answer_relevant": False,
                         "retry_count": 0,
                     })
                     answer = agentic_state["answer"]

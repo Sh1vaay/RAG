@@ -123,6 +123,7 @@ def run_pipeline_query(pipeline: dict, query: str) -> dict:
                 "relevant_docs": [],
                 "answer": "",
                 "reflection_passed": False,
+                "answer_relevant": False,
                 "retry_count": 0,
             })
             answer = agentic_state["answer"]
