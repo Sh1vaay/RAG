@@ -52,8 +52,10 @@ This project addresses these challenges by implementing an **offline, high-recal
 
 * 📂 **Multi-Format Processing**: Routes PDFs (`PyPDFLoader`), CSVs (`CSVLoader`), Word files (`Docx2txtLoader`), and text documents directly from a local `./documents` folder.
 * 🔮 **Configurable Dual-Routing Engine**: Supports both a millisecond-level embedding-based **Semantic Router** (zero LLM token cost) and a structured **LLM Router** (with reasoning tags), dynamically directing questions to the optimal translation technique (HyDE, Step-Back, Decomposition, RAG-Fusion, Multi-Query, or Standard retrieval).
+* 🕸️ **Stateful LangGraph Agent**: Uses a cyclic state-graph workflow for multi-step or comparative query decomposition, handling sub-tasks sequentially with contextual memory tracking.
 * 🧠 **Semantic Chunking**: Instead of static character-limit splits, the pipeline calculates similarity drift between consecutive sentences to keep related concepts together.
 * 🔍 **Hybrid Query Matching**: Fuses vector similarity (dense search) with term-frequency index scanning (BM25 sparse search) to capture both concepts and exact keywords.
+* ⚖️ **HyDE Hallucination Guardrail**: Performs a cosine similarity embedding check on the generated hypothetical passage, falling back to standard retrieval if similarity drops below `0.60`.
 * ⚡ **Parallel Retrieval Execution**: Runs sub-queries concurrently via a Python ThreadPool executor to ensure near-zero latency overhead for multi-query strategies.
 * 🎯 **Local Cross-Encoder Re-ranking**: Uses `Flashrank` to run local quantized Cross-Encoder scoring to keep only the top 3 most relevant context documents.
 * 💬 **History-Aware Contextualization**: Translates conversational pronouns (e.g. *"What is task decomposition?"* $\rightarrow$ *"Give me an example of it"*) into self-contained search terms.
@@ -174,6 +176,7 @@ sequenceDiagram
 * **Vector Store**: [Chroma DB](https://github.com/chroma-core/chroma)
 * **Sparse Index**: [Rank-BM25](https://github.com/dorianbrown/rank_bm25)
 * **Re-ranker Model**: [Flashrank](https://github.com/prithivida/flashrank) (runs locally using ONNX, zero API keys required)
+* **Agent Framework**: [LangGraph](https://github.com/langchain-ai/langgraph) (for cyclic decomposition loops)
 * **Document Processing**: `pypdf`, `docx2txt`, `beautifulsoup4`, `tiktoken`
 
 ---
@@ -189,7 +192,8 @@ rag_project/
 ├── requirements.txt    # Shared dependency list
 │
 ├── ingest.py           # Scraping, parsing, chunking, and embedding database pipeline
-├── query_processor.py  # Dynamic routing engine with all 5 query translation techniques
+├── query_processor.py  # Dynamic routing engine with 5 query translation techniques
+├── decomposition_graph.py # Stateful LangGraph agent for cyclic decomposed queries
 ├── main.py             # User interface, database retriever load, and generation logic
 ├── playground.py       # Helper playground for similarity calculations and token sizes
 │

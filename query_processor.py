@@ -111,29 +111,53 @@ class SemanticRouter:
             
         return best_route, best_score
 
-# 4. Define Translation Prompts
+# 4. Define Translation Prompts with Technical Few-Shot Examples
 MULTI_QUERY_PROMPT = ChatPromptTemplate.from_messages([
     ("system", "You are an AI assistant tasked with generating three different versions of the given user question "
                "to retrieve the most relevant documents from a vector database. Provide these alternative questions "
-               "separated by newlines. Do not add numbering, bullet points, or introductory text."),
+               "separated by newlines. Do not add numbering, bullet points, or introductory text.\n\n"
+               "Example:\n"
+               "User Query: What is semantic chunking?\n"
+               "Alternative Questions:\n"
+               "How does semantic similarity sentence splitting work?\n"
+               "What is the difference between semantic chunking and character chunking?\n"
+               "Explain semantic boundary detection in document ingestion."),
     ("human", "{question}")
 ])
 
 STEP_BACK_PROMPT = ChatPromptTemplate.from_messages([
     ("system", "You are an expert technical assistant. Given a specific user question, generate a broader, more abstract "
-               "step-back question about the underlying general principles or concepts. Output only the step-back question."),
+               "step-back question about the underlying general principles or concepts. Output only the step-back question.\n\n"
+               "Example 1:\n"
+               "User Query: Why did my Tesla Model 3 battery die at 20% in the snow?\n"
+               "Step-Back: How does extreme cold affect lithium-ion battery degradation?\n\n"
+               "Example 2:\n"
+               "User Query: Why does Chroma throw a sqlite3.OperationalError: table already exists?\n"
+               "Step-Back: What are the common causes of database schema conflicts in SQLite persistence?"),
     ("human", "{question}")
 ])
 
 DECOMPOSITION_PROMPT = ChatPromptTemplate.from_messages([
     ("system", "You are an AI assistant. Decompose the given user question into 2 or 3 smaller, sequential sub-questions "
-               "needed to formulate the final answer. Output only the sub-questions, one per line. Do not add numbering or bullet points."),
+               "needed to formulate the final answer. Output only the sub-questions, one per line. Do not add numbering or bullet points.\n\n"
+               "Example:\n"
+               "User Query: Compare chain of thought prompting and self consistency.\n"
+               "Sub-questions:\n"
+               "What is chain of thought prompting?\n"
+               "What is self consistency in language models?\n"
+               "How do chain of thought and self consistency compare in methodology and accuracy?"),
     ("human", "{question}")
 ])
 
 HYDE_PROMPT = ChatPromptTemplate.from_messages([
     ("system", "Write a short, hypothetical document or textbook paragraph answering the user's question. "
-               "Do not write introductions or meta-commentary, just write the factual passage directly."),
+               "Do not write introductions or meta-commentary, just write the factual passage directly.\n\n"
+               "Example:\n"
+               "User Query: What is task decomposition?\n"
+               "Hypothetical Answer:\n"
+               "Task decomposition is a method used to break down a complex task into smaller, manageable sub-tasks. "
+               "In the context of AI agents, techniques like Chain of Thought (CoT) or Tree of Thoughts are applied "
+               "to split multi-step problems into sequential reasoning steps, allowing the LLM to process each part individually."),
     ("human", "{question}")
 ])
 
@@ -236,12 +260,28 @@ class RoutingRetriever(BaseRetriever):
 
     def retrieve_for_route(self, query: str, route: str) -> List[Document]:
         """Runs the translation strategy logic and retrieves source documents."""
+        # Route 1: Hypothetical Document Embeddings (HyDE) with similarity threshold check
         if route == "hyde":
             hyde_chain = HYDE_PROMPT | self.llm
             try:
                 hypothetical_answer = hyde_chain.invoke({"question": query}).content.strip()
-                print(f"📝 [HyDE Passage Generated]:\n\"{hypothetical_answer[:180]}...\"\n")
-                return self.base_retriever.invoke(hypothetical_answer)
+                
+                # Check Cosine Similarity of original query vs hypothetical answer to catch hallucination
+                query_vector = self.embeddings.embed_query(query)
+                hyde_vector = self.embeddings.embed_query(hypothetical_answer)
+                similarity = float(np.dot(query_vector, hyde_vector))
+                
+                # Safety similarity threshold (standard for OpenAI text-embedding-3-small)
+                threshold = 0.60
+                
+                print(f"⚖️ [HyDE Similarity Check] Score: {similarity:.4f} (Threshold: {threshold})")
+                
+                if similarity >= threshold:
+                    print(f"📝 [HyDE Passage Accepted & Querying]:\n\"{hypothetical_answer[:180]}...\"\n")
+                    return self.base_retriever.invoke(hypothetical_answer)
+                else:
+                    print(f"⚠️ [WARNING] HyDE similarity below threshold. Hallucination drift detected. Discarding passage and falling back to original query.\n")
+                    return self.base_retriever.invoke(query)
             except Exception as e:
                 print(f"[ERROR] HyDE pipeline failed: {e}", file=sys.stderr)
                 return self.base_retriever.invoke(query)
