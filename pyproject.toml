@@ -1,7 +1,7 @@
 [project]
 name = "rag"
 version = "0.1.0"
-description = "Add your description here"
+description = "Production-grade Corrective RAG (CRAG) and Self-RAG hybrid retrieval system with multi-agent LangGraph workflows"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -24,6 +24,4 @@ dependencies = [
     "langchain-cohere>=0.1.0",
     "langgraph>=0.2.0",
     "duckduckgo-search>=6.1.7",
-    "ragas>=0.2.0",
-    "datasets>=2.19.0",
 ]
