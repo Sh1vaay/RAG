@@ -61,7 +61,7 @@ This project addresses these challenges by implementing an **offline, high-recal
 * 🔍 **Hybrid Query Matching**: Fuses vector similarity (dense search) with term-frequency index scanning (BM25 sparse search) to capture both concepts and exact keywords.
 * ⚖️ **HyDE Hallucination Guardrail**: Performs a cosine similarity embedding check on the generated hypothetical passage, falling back to standard retrieval if similarity drops below `0.60`.
 * ⚡ **Parallel Retrieval Execution**: Runs sub-queries concurrently via a Python ThreadPool executor to ensure near-zero latency overhead for multi-query strategies.
-* 🎯 **Local Cross-Encoder Re-ranking**: Uses `Flashrank` to run local quantized Cross-Encoder scoring to keep only the top 3 most relevant context documents.
+* 🎯 **Configurable Reranking**: Supports either local, zero-cost quantized Cross-Encoder scoring via `Flashrank`, or cloud-based enterprise `Cohere Rerank` integration, selectable in the environment configuration.
 * 💬 **History-Aware Contextualization**: Translates conversational pronouns (e.g. *"What is task decomposition?"* $\rightarrow$ *"Give me an example of it"*) into self-contained search terms.
 * 📚 **Fact-Checking Citations**: Every generated answer is paired with the exact source title, source URL, and a snippet preview.
 

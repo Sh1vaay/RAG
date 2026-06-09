@@ -93,17 +93,29 @@ def main():
         print(f"[ERROR] Failed to build hybrid retriever: {e}", file=sys.stderr)
         return
 
-    # 4. Setup Local Cross-Encoder Reranker (Flashrank)
-    print("Initializing local Cross-Encoder reranking (Flashrank)...")
+    # 4. Setup Reranker (Flashrank or Cohere)
+    reranker_provider = os.getenv("RERANKER_PROVIDER", "flashrank").strip().lower()
     try:
-        # Setup Flashrank compressor to re-rank the hybrid candidates, outputting only the top 3
-        compressor = FlashrankRerank(top_n=3)
+        if reranker_provider == "cohere":
+            cohere_api_key = os.getenv("COHERE_API_KEY")
+            if not cohere_api_key or cohere_api_key == "your_cohere_api_key_here":
+                print("[WARNING] COHERE_API_KEY is not set. Falling back to local Flashrank.", file=sys.stderr)
+                compressor = FlashrankRerank(top_n=3)
+                print("Initializing local Cross-Encoder reranking (Flashrank)...")
+            else:
+                from langchain_cohere import CohereRerank
+                compressor = CohereRerank(top_n=3)
+                print("Initializing cloud-based Cohere reranking...")
+        else:
+            compressor = FlashrankRerank(top_n=3)
+            print("Initializing local Cross-Encoder reranking (Flashrank)...")
+
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=compressor, 
             base_retriever=ensemble_retriever
         )
     except Exception as e:
-        print(f"[ERROR] Failed to initialize Flashrank reranker: {e}", file=sys.stderr)
+        print(f"[ERROR] Failed to initialize reranker ({reranker_provider}): {e}", file=sys.stderr)
         return
 
     # 5. Setup LLM

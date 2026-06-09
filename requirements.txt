@@ -15,3 +15,4 @@ rank-bm25
 flashrank
 langgraph
 scikit-learn
+langchain-cohere
