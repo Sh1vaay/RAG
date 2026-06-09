@@ -25,6 +25,9 @@ def post_filter_documents(docs: list, query: SearchQuery) -> list:
         # Check page number
         if query.page_number and doc.metadata.get("page") != query.page_number:
             continue
+        # Check data_source
+        if query.data_source and doc.metadata.get("data_source") != query.data_source:
+            continue
         filtered_docs.append(doc)
     return filtered_docs
 
@@ -211,6 +214,8 @@ def main():
                     chroma_filters["year"] = structured_query.publish_year
                 if structured_query.page_number:
                     chroma_filters["page"] = structured_query.page_number
+                if structured_query.data_source:
+                    chroma_filters["data_source"] = structured_query.data_source
                 
                 # Dynamically inject filter to the Chroma retriever
                 vector_retriever.search_kwargs["filter"] = chroma_filters if chroma_filters else None

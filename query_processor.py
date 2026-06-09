@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional, Literal
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from pydantic import BaseModel, Field
@@ -383,6 +383,10 @@ class SearchQuery(BaseModel):
         None,
         description="Specific 1-indexed page number to extract (only for PDFs)."
     )
+    data_source: Optional[Literal["web_blogs", "academic_papers", "internal_docs"]] = Field(
+        None,
+        description="Filter by data source index. 'web_blogs' for blogs/URLs, 'academic_papers' for research/scientific papers, 'internal_docs' for general local documentation files."
+    )
 
 class QueryAnalyzer:
     """Invokes structured output parsing to separate semantic search terms from hard metadata constraints."""
@@ -397,8 +401,9 @@ class QueryAnalyzer:
             "Metadata Schema:\n"
             "- file_type: 'pdf', 'csv', 'docx', 'txt', 'web'\n"
             "- publish_year: four digit year (e.g. 2023)\n"
-            "- page_number: page number to fetch (only if user explicitly says page 2, page 5, etc.)\n\n"
-            "Be precise. If any constraint is not explicitly mentioned, return null for that field."
+            "- page_number: page number to fetch (only if user explicitly says page 2, page 5, etc.)\n"
+            "- data_source: 'web_blogs' (for blogs/web pages), 'academic_papers' (for research papers/journals), 'internal_docs' (for general local documentation)\n\n"
+            "Be precise. If any constraint is not explicitly mentioned or clearly implied, return null for that field."
         )
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),

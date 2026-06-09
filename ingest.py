@@ -134,6 +134,14 @@ def ingest_data():
         else:
             doc.metadata["row"] = 0
 
+        # 4. Determine data_source corpus categorization
+        if source.startswith("http"):
+            doc.metadata["data_source"] = "web_blogs"
+        elif any(kw in source.lower() for kw in ("paper", "arxiv", "academic", "research")):
+            doc.metadata["data_source"] = "academic_papers"
+        else:
+            doc.metadata["data_source"] = "internal_docs"
+
     print(f"Splitting documents (Loaded {len(docs)} pages/documents) using Semantic Chunker...")
     try:
         # Explicitly set the embedding model to ensure stability and calculate similarity thresholds
