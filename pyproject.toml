@@ -24,4 +24,6 @@ dependencies = [
     "langchain-cohere>=0.1.0",
     "langgraph>=0.2.0",
     "duckduckgo-search>=6.1.7",
+    "ragas>=0.2.0",
+    "datasets>=2.19.0",
 ]

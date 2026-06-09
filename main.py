@@ -35,87 +35,71 @@ def post_filter_documents(docs: list, query: SearchQuery) -> list:
 # Load environment variables
 load_dotenv()
 
-def main():
+def setup_pipeline():
     # 1. Validation Checks
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key or api_key == "your_openai_api_key_here":
-        print("[ERROR] OPENAI_API_KEY is not set or is still the default placeholder value in .env.", file=sys.stderr)
-        print("Please configure your OpenAI API key in the .env file before running main.py.", file=sys.stderr)
-        return
+        raise ValueError("OPENAI_API_KEY is not set or is still the default placeholder value in .env.")
 
     # Check if vectorstore exists
     db_path = "./faiss_db"
     if not os.path.exists(db_path) or not os.listdir(db_path):
-        print(f"[ERROR] FAISS database directory '{db_path}' is empty or does not exist.", file=sys.stderr)
-        print("Please run data ingestion first by running: `uv run ingest.py`", file=sys.stderr)
-        return
+        raise FileNotFoundError(f"FAISS database directory '{db_path}' is empty or does not exist.")
 
     # 2. Load the existing FAISS database from disk
     print("Loading database...")
-    try:
-        embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-        vectorstore = FAISS.load_local(
-            db_path,
-            embeddings,
-            allow_dangerous_deserialization=True
-        )
-    except Exception as e:
-        print(f"[ERROR] Failed to load vector database: {e}", file=sys.stderr)
-        return
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    vectorstore = FAISS.load_local(
+        db_path,
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
     
     # 3. Setup Keyword (BM25) and Semantic (FAISS) Retrievers
     print("Initializing hybrid retrieval (BM25 + FAISS)...")
-    try:
-        # Extract all documents currently persisted inside the vector store to seed the BM25 index
-        documents = list(vectorstore.docstore._dict.values())
-        
-        if not documents:
-            raise ValueError("No documents loaded from vector store database to build BM25 search index.")
+    # Extract all documents currently persisted inside the vector store to seed the BM25 index
+    documents = list(vectorstore.docstore._dict.values())
+    
+    if not documents:
+        raise ValueError("No documents loaded from vector store database to build BM25 search index.")
 
-        # Initialize keyword search on exact document contents
-        bm25_retriever = BM25Retriever.from_documents(documents)
-        # Retrieve a broader pool of candidates (k=8) to allow the reranker to prune
-        bm25_retriever.k = 8
+    # Initialize keyword search on exact document contents
+    bm25_retriever = BM25Retriever.from_documents(documents)
+    # Retrieve a broader pool of candidates (k=8) to allow the reranker to prune
+    bm25_retriever.k = 8
 
-        # Initialize semantic/vector search (k=8)
-        vector_retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
+    # Initialize semantic/vector search (k=8)
+    vector_retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
 
-        # Initialize basic retriever (k=3) for the Fast Path bypass
-        basic_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    # Initialize basic retriever (k=3) for the Fast Path bypass
+    basic_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
-        # Combine retrievers using Reciprocal Rank Fusion (RRF)
-        ensemble_retriever = EnsembleRetriever(
-            retrievers=[bm25_retriever, vector_retriever],
-            weights=[0.5, 0.5]
-        )
-    except Exception as e:
-        print(f"[ERROR] Failed to build hybrid retriever: {e}", file=sys.stderr)
-        return
+    # Combine retrievers using Reciprocal Rank Fusion (RRF)
+    ensemble_retriever = EnsembleRetriever(
+        retrievers=[bm25_retriever, vector_retriever],
+        weights=[0.5, 0.5]
+    )
 
     # 4. Setup Reranker (Flashrank or Cohere)
     reranker_provider = os.getenv("RERANKER_PROVIDER", "flashrank").strip().lower()
-    try:
-        if reranker_provider == "cohere":
-            cohere_api_key = os.getenv("COHERE_API_KEY")
-            if not cohere_api_key or cohere_api_key == "your_cohere_api_key_here":
-                print("[WARNING] COHERE_API_KEY is not set. Falling back to local Flashrank.", file=sys.stderr)
-                compressor = FlashrankRerank(top_n=3)
-                print("Initializing local Cross-Encoder reranking (Flashrank)...")
-            else:
-                from langchain_cohere import CohereRerank
-                compressor = CohereRerank(top_n=3)
-                print("Initializing cloud-based Cohere reranking...")
-        else:
+    if reranker_provider == "cohere":
+        cohere_api_key = os.getenv("COHERE_API_KEY")
+        if not cohere_api_key or cohere_api_key == "your_cohere_api_key_here":
+            print("[WARNING] COHERE_API_KEY is not set. Falling back to local Flashrank.", file=sys.stderr)
             compressor = FlashrankRerank(top_n=3)
             print("Initializing local Cross-Encoder reranking (Flashrank)...")
+        else:
+            from langchain_cohere import CohereRerank
+            compressor = CohereRerank(top_n=3)
+            print("Initializing cloud-based Cohere reranking...")
+    else:
+        compressor = FlashrankRerank(top_n=3)
+        print("Initializing local Cross-Encoder reranking (Flashrank)...")
 
-        compression_retriever = ContextualCompressionRetriever(
-            base_compressor=compressor, 
-            base_retriever=ensemble_retriever
-        )
-    except Exception as e:
-        print(f"[ERROR] Failed to initialize reranker ({reranker_provider}): {e}", file=sys.stderr)
-        return
+    compression_retriever = ContextualCompressionRetriever(
+        base_compressor=compressor, 
+        base_retriever=ensemble_retriever
+    )
 
     # 5. Setup LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
@@ -123,21 +107,17 @@ def main():
 
     # 6. Setup Routing Retriever (Dynamic Translation Router)
     print("Initializing Dynamic Query Translation Router...")
-    try:
-        routing_method = os.getenv("ROUTING_METHOD", "semantic").strip().lower()
-        if routing_method not in ("semantic", "llm"):
-            routing_method = "semantic"
-            
-        routing_retriever = RoutingRetriever(
-            base_retriever=compression_retriever,
-            llm=llm,
-            embeddings=embeddings,
-            routing_method=routing_method
-        )
-        routing_retriever.initialize_router()
-    except Exception as e:
-        print(f"[ERROR] Failed to initialize Routing Retriever: {e}", file=sys.stderr)
-        return
+    routing_method = os.getenv("ROUTING_METHOD", "semantic").strip().lower()
+    if routing_method not in ("semantic", "llm"):
+        routing_method = "semantic"
+        
+    routing_retriever = RoutingRetriever(
+        base_retriever=compression_retriever,
+        llm=llm,
+        embeddings=embeddings,
+        routing_method=routing_method
+    )
+    routing_retriever.initialize_router()
 
     # 7. Define Prompts for Conversational Flow
     
@@ -173,6 +153,41 @@ def main():
     # Build the Fast Path simple chain using the basic retriever
     fast_history_retriever = create_history_aware_retriever(llm, basic_retriever, contextualize_q_prompt)
     fast_rag_chain = create_retrieval_chain(fast_history_retriever, question_answer_chain)
+
+    return {
+        "llm": llm,
+        "embeddings": embeddings,
+        "vectorstore": vectorstore,
+        "vector_retriever": vector_retriever,
+        "basic_retriever": basic_retriever,
+        "ensemble_retriever": ensemble_retriever,
+        "compression_retriever": compression_retriever,
+        "query_analyzer": query_analyzer,
+        "routing_retriever": routing_retriever,
+        "contextualize_q_prompt": contextualize_q_prompt,
+        "question_answer_chain": question_answer_chain,
+        "fast_rag_chain": fast_rag_chain,
+    }
+
+def main():
+    try:
+        pipeline = setup_pipeline()
+    except Exception as e:
+        print(f"[ERROR] Pipeline setup failed: {e}", file=sys.stderr)
+        return
+        
+    llm = pipeline["llm"]
+    embeddings = pipeline["embeddings"]
+    vectorstore = pipeline["vectorstore"]
+    vector_retriever = pipeline["vector_retriever"]
+    basic_retriever = pipeline["basic_retriever"]
+    ensemble_retriever = pipeline["ensemble_retriever"]
+    compression_retriever = pipeline["compression_retriever"]
+    query_analyzer = pipeline["query_analyzer"]
+    routing_retriever = pipeline["routing_retriever"]
+    contextualize_q_prompt = pipeline["contextualize_q_prompt"]
+    question_answer_chain = pipeline["question_answer_chain"]
+    fast_rag_chain = pipeline["fast_rag_chain"]
 
     # Initialize in-memory session chat history
     chat_history = []

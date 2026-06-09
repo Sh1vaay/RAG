@@ -17,3 +17,5 @@ langgraph
 scikit-learn
 langchain-cohere
 duckduckgo-search
+ragas
+datasets
