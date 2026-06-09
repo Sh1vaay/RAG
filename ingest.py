@@ -13,7 +13,7 @@ from langchain_community.document_loaders import (
 )
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_chroma import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from multi_rep_utils import generate_summaries
 
@@ -266,16 +266,16 @@ def ingest_data():
         final_docs = final_docs + raptor_docs  # merge leaf summaries + cluster summaries
         print(f"📦 Total documents to embed: {len(final_docs)} (leaves + RAPTOR summaries)")
 
-    print("Embedding and saving to Chroma database...")
+    print("Embedding and saving to FAISS database...")
     try:
-        Chroma.from_documents(
+        db = FAISS.from_documents(
             documents=final_docs,
-            embedding=embeddings,
-            persist_directory="./chroma_db"
+            embedding=embeddings
         )
-        print("Ingestion complete. Database successfully saved to ./chroma_db")
+        db.save_local("faiss_db")
+        print("Ingestion complete. Database successfully saved to ./faiss_db")
     except Exception as e:
-        print(f"[ERROR] Failed to generate embeddings or write to Chroma database: {e}", file=sys.stderr)
+        print(f"[ERROR] Failed to generate embeddings or write to FAISS database: {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":

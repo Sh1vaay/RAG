@@ -87,7 +87,7 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
     Parameters
     ----------
     retriever : BaseRetriever
-        The existing compression_retriever (BM25 + Chroma + Flashrank). Reused as-is.
+        The existing compression_retriever (BM25 + FAISS + Flashrank). Reused as-is.
     llm : ChatOpenAI
         The shared gpt-4o-mini instance from main.py.
     """

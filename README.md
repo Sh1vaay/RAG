@@ -11,7 +11,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Package Manager](https://img.shields.io/badge/UV-Package%20Manager-00D2B4?style=for-the-badge&logo=cargo&logoColor=white)](https://github.com/astral-sh/uv)
 [![Framework](https://img.shields.io/badge/LangChain-v1.0%2B-F15A24?style=for-the-badge&logo=chainlink&logoColor=white)](https://github.com/langchain-ai/langchain)
-[![VectorDB](https://img.shields.io/badge/Chroma-DB-FC6D26?style=for-the-badge&logo=databricks&logoColor=white)](https://github.com/chroma-core/chroma)
+[![VectorDB](https://img.shields.io/badge/FAISS-VectorStore-blue?style=for-the-badge&logo=facebook&logoColor=white)](https://github.com/facebookresearch/faiss)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
 </div>
@@ -95,10 +95,10 @@ flowchart TD
     Chunking --> Splits[Generate Semantic Chunks]
     
     %% Persistence
-    Splits --> VectorStoreChroma[(Save to Local ./chroma_db)]
-    VectorStoreChroma --> End([Ingestion Complete])
+    Splits --> VectorStoreFAISS[(Save to Local ./faiss_db)]
+    VectorStoreFAISS --> End([Ingestion Complete])
     
-    style VectorStoreChroma fill:#ff9900,stroke:#333,stroke-width:2px
+    style VectorStoreFAISS fill:#ff9900,stroke:#333,stroke-width:2px
     style Chunking fill:#2ecc71,stroke:#333,stroke-width:2px
     style Router fill:#3498db,stroke:#333,stroke-width:2px
 ```
@@ -112,7 +112,7 @@ flowchart TD
     %% Parallel Retrieval Loop
     subgraph Parallel Retrieval per Query Variation
         MultiQuery --> BM25[BM25Retriever: Sparse Keyword Match]
-        MultiQuery --> Vector[ChromaRetriever: Dense Vector Similarity]
+        MultiQuery --> Vector[FAISSRetriever: Dense Vector Similarity]
     end
     
     BM25 -->|Retrieve top-8| Merger[EnsembleRetriever: Reciprocal Rank Fusion]
@@ -177,7 +177,7 @@ sequenceDiagram
 
 * **Package Manager**: [uv](https://github.com/astral-sh/uv) (Rust-powered, ultra-fast Python environment sync)
 * **LLM Engine**: OpenAI API (`gpt-4o-mini` & `text-embedding-3-small`)
-* **Vector Store**: [Chroma DB](https://github.com/chroma-core/chroma)
+* **Vector Store**: [FAISS](https://github.com/facebookresearch/faiss) (Facebook AI Similarity Search - lightweight, local, network-vulnerability-free vector library)
 * **Sparse Index**: [Rank-BM25](https://github.com/dorianbrown/rank_bm25)
 * **Re-ranker Model**: [Flashrank](https://github.com/prithivida/flashrank) (runs locally using ONNX, zero API keys required)
 * **Agent Framework**: [LangGraph](https://github.com/langchain-ai/langgraph) (for cyclic decomposition loops)
@@ -191,7 +191,7 @@ sequenceDiagram
 rag_project/
 │
 ├── .env.example        # Reference configurations (Template)
-├── .gitignore          # Safeguards to prevent committing .env and chroma_db
+├── .gitignore          # Safeguards to prevent committing .env and faiss_db
 ├── pyproject.toml      # Modern PEP 518/621 project configuration managed by uv
 ├── requirements.txt    # Shared dependency list
 │
@@ -204,7 +204,7 @@ rag_project/
 ├── playground.py       # Helper playground for similarity calculations and token sizes
 │
 ├── documents/          # Directory where local PDFs, CSVs, and Word files are placed
-└── chroma_db/          # Persistent local directory containing vector indices (Git ignored)
+└── faiss_db/           # Persistent local directory containing vector indices (Git ignored)
 ```
 
 ---
@@ -255,7 +255,7 @@ ROUTING_METHOD=semantic
 
 ## 🔒 Security & Optimization
 
-* **Secrets Management**: Built-in protections inside `.gitignore` ensure `.env` and local database binary caches (`chroma_db/`) are blocked from version control.
+* **Secrets Management**: Built-in protections inside `.gitignore` ensure `.env` and local database binary caches (`faiss_db/`) are blocked from version control.
 * **Token Boundaries**: Semantic chunking breaks text without exceeding context-window limits, preventing model truncation and context cost bloat.
 * **Fast Startup**: Hybrid search indexes are serialized and loaded from disk locally, bypassing repeated document scraping.
 

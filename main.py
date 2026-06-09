@@ -1,7 +1,7 @@
 import os
 import sys
 from dotenv import load_dotenv
-from langchain_chroma import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -44,34 +44,30 @@ def main():
         return
 
     # Check if vectorstore exists
-    db_path = "./chroma_db"
+    db_path = "./faiss_db"
     if not os.path.exists(db_path) or not os.listdir(db_path):
-        print(f"[ERROR] Chroma database directory '{db_path}' is empty or does not exist.", file=sys.stderr)
+        print(f"[ERROR] FAISS database directory '{db_path}' is empty or does not exist.", file=sys.stderr)
         print("Please run data ingestion first by running: `uv run ingest.py`", file=sys.stderr)
         return
 
-    # 2. Load the existing Chroma database from disk
+    # 2. Load the existing FAISS database from disk
     print("Loading database...")
     try:
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-        vectorstore = Chroma(
-            persist_directory=db_path,
-            embedding_function=embeddings
+        vectorstore = FAISS.load_local(
+            db_path,
+            embeddings,
+            allow_dangerous_deserialization=True
         )
     except Exception as e:
         print(f"[ERROR] Failed to load vector database: {e}", file=sys.stderr)
         return
     
-    # 3. Setup Keyword (BM25) and Semantic (Chroma) Retrievers
-    print("Initializing hybrid retrieval (BM25 + Chroma)...")
+    # 3. Setup Keyword (BM25) and Semantic (FAISS) Retrievers
+    print("Initializing hybrid retrieval (BM25 + FAISS)...")
     try:
         # Extract all documents currently persisted inside the vector store to seed the BM25 index
-        raw_db_data = vectorstore.get()
-        documents = []
-        if raw_db_data and "documents" in raw_db_data:
-            from langchain_core.documents import Document
-            for text, meta in zip(raw_db_data["documents"], raw_db_data["metadatas"]):
-                documents.append(Document(page_content=text, metadata=meta))
+        documents = list(vectorstore.docstore._dict.values())
         
         if not documents:
             raise ValueError("No documents loaded from vector store database to build BM25 search index.")
@@ -83,6 +79,9 @@ def main():
 
         # Initialize semantic/vector search (k=8)
         vector_retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
+
+        # Initialize basic retriever (k=3) for the Fast Path bypass
+        basic_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
         # Combine retrievers using Reciprocal Rank Fusion (RRF)
         ensemble_retriever = EnsembleRetriever(
@@ -168,17 +167,12 @@ def main():
     ])
 
     # 8. Build the Chains
-    
-    # Create retriever that takes history into account and pipes to the routed hybrid retriever
-    history_aware_retriever = create_history_aware_retriever(
-        llm, routing_retriever, contextualize_q_prompt
-    )
-
-    # Create QA chain that combines retrieved documents
+    # Build standard QA Chain for the heavy pipeline
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
 
-    # Create full retrieval RAG chain
-    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+    # Build the Fast Path simple chain using the basic retriever
+    fast_history_retriever = create_history_aware_retriever(llm, basic_retriever, contextualize_q_prompt)
+    fast_rag_chain = create_retrieval_chain(fast_history_retriever, question_answer_chain)
 
     # Initialize in-memory session chat history
     chat_history = []
@@ -216,27 +210,50 @@ def main():
                 else:
                     standalone_q = query
                 
-                # 2. Extract query filters/constraints
+                # 2. Check Semantic Router immediately for Fast Path
+                route, _ = routing_retriever.determine_route(standalone_q)
+                
+                if route == "simple":
+                    print("⚡ [Fast Path Triggered] Simple query detected. Bypassing heavy pipeline...")
+                    fast_result = fast_rag_chain.invoke({
+                        "input": standalone_q,
+                        "chat_history": chat_history
+                    })
+                    answer = fast_result["answer"]
+                    context_docs = fast_result.get("context", [])
+                    
+                    # Display Output & Update History
+                    print(f"\nAnswer:\n{answer}")
+                    if context_docs:
+                        print("\n📚 Top Sources (Fast Retrieval):")
+                        for idx, doc in enumerate(context_docs[:3], 1):
+                            source_url = doc.metadata.get("source", "Unknown Source")
+                            snippet = doc.page_content[:100].strip().replace('\n', ' ')
+                            print(f"  [{idx}] {source_url} - \"{snippet}...\"")
+                            
+                    chat_history.append(HumanMessage(content=query))
+                    chat_history.append(AIMessage(content=answer))
+                    continue
+
+                # 3. Proceed with Heavy Pipeline
+                # Extract query filters/constraints
                 structured_query = query_analyzer.analyze(standalone_q)
                 
-                # Build Chroma database filter dictionary
-                chroma_filters = {}
+                # Build database filter dictionary
+                db_filters = {}
                 if structured_query.file_type:
-                    chroma_filters["file_type"] = structured_query.file_type
+                    db_filters["file_type"] = structured_query.file_type
                 if structured_query.publish_year:
-                    chroma_filters["year"] = structured_query.publish_year
+                    db_filters["year"] = structured_query.publish_year
                 if structured_query.page_number:
-                    chroma_filters["page"] = structured_query.page_number
+                    db_filters["page"] = structured_query.page_number
                 if structured_query.data_source:
-                    chroma_filters["data_source"] = structured_query.data_source
+                    db_filters["data_source"] = structured_query.data_source
                 
-                # Dynamically inject filter to the Chroma retriever
-                vector_retriever.search_kwargs["filter"] = chroma_filters if chroma_filters else None
-                if chroma_filters:
-                    print(f"🎯 [Query Analyzer] Extracted constraints: {chroma_filters}")
-                
-                # 3. Determine Route
-                route, _ = routing_retriever.determine_route(structured_query.content_search)
+                # Dynamically inject filter to the retriever
+                vector_retriever.search_kwargs["filter"] = db_filters if db_filters else None
+                if db_filters:
+                    print(f"🎯 [Query Analyzer] Extracted constraints: {db_filters}")
                 
                 # 4. Execute Route
                 if route == "decomposition":

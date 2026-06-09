@@ -36,7 +36,7 @@ def generate_summaries(splits: List[Document], llm: ChatOpenAI) -> List[Document
       2. Return a new Document whose page_content is the summary and whose
          metadata contains the original chunk text under 'original_content'.
 
-    The returned list is what gets embedded and stored in Chroma.
+    The returned list is what gets embedded and stored in the vector database.
     """
     if not splits:
         return []

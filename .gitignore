@@ -21,8 +21,7 @@ ENV/
 !.env.example
 
 # Local Database & Storage
-chroma_db/
-.chroma/
+faiss_db/
 
 # IDEs and Editors
 .vscode/

@@ -82,6 +82,16 @@ class SemanticRouter:
                 "Who wrote the article on autonomous agents?",
                 "Where can I find the agent framework details?",
                 "Give me information about prompt engineering."
+            ],
+            "simple": [
+                "Hello",
+                "Hi there",
+                "What is FAISS?",
+                "Who made this?",
+                "What is the capital of France?",
+                "How are you?",
+                "Thanks!",
+                "What is the definition of RAG?"
             ]
         }
         self.route_embeddings = {}
