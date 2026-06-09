@@ -17,7 +17,7 @@ from langchain_core.documents import Document
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from multi_rep_utils import generate_summaries
+from .multi_rep_utils import generate_summaries
 
 # Load environment variables from .env file
 load_dotenv()

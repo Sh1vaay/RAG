@@ -10,8 +10,8 @@ from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
 # Import pipeline components from main.py
-from main import post_filter_documents, setup_pipeline
-from multi_rep_utils import restore_original_content
+from .main import post_filter_documents, setup_pipeline
+from .multi_rep_utils import restore_original_content
 
 # Global pipeline state container
 pipeline = None
@@ -232,7 +232,7 @@ async def chat_endpoint(request: ChatRequest):
             )
 
             if route == "decomposition":
-                from decomposition_graph import create_decomposition_graph
+                from .decomposition_graph import create_decomposition_graph
 
                 graph = create_decomposition_graph(pipeline["compression_retriever"], llm)
                 state = graph.invoke(
@@ -262,7 +262,7 @@ async def chat_endpoint(request: ChatRequest):
                     "contrast",
                 )
             ):
-                from agentic_graph import create_agentic_graph
+                from .agentic_graph import create_agentic_graph
 
                 agentic = create_agentic_graph(pipeline["compression_retriever"], llm)
                 agentic_state = agentic.invoke(
@@ -356,7 +356,7 @@ async def trigger_ingestion(raptor: bool = False):
     try:
         import asyncio
 
-        cmd = [sys.executable, "ingest.py"]
+        cmd = [sys.executable, "-m", "src.ingest"]
         if raptor:
             cmd.append("--raptor")
 
@@ -397,4 +397,4 @@ async def trigger_ingestion(raptor: bool = False):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("src.app:app", host="127.0.0.1", port=8000, reload=True)

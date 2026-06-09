@@ -70,13 +70,13 @@ The following diagram illustrates Aether AI's multi-layered layout, showing data
 graph TB
     subgraph UI ["🖥️ Presentation Layer (Frontend / Client)"]
         Browser["🌐 Web Browser (HTML5/JS Dashboard)"]
-        CLI["💻 CLI Client (main.py)"]
+        CLI["💻 CLI Client (src/main.py)"]
     end
 
     subgraph API ["⚡ API & Orchestration Layer (Backend)"]
-        FastAPI["🚀 FastAPI App (app.py)"]
-        Router["🔀 Query Switchboard (query_processor.py)"]
-        LangGraph["🕸️ LangGraph Agents (agentic_graph.py / decomposition_graph.py)"]
+        FastAPI["🚀 FastAPI App (src/app.py)"]
+        Router["🔀 Query Switchboard (src/query_processor.py)"]
+        LangGraph["🕸️ LangGraph Agents (src/agentic_graph.py / src/decomposition_graph.py)"]
     end
 
     subgraph DATA ["💾 Data & Storage Layer"]
@@ -103,10 +103,13 @@ graph TB
     FastAPI -->|Load Documents| FS
     
     %% External API calls
-    LangGraph & Router -->|Embeddings / Gen| OpenAI
+    LangGraph -->|Embeddings / Gen| OpenAI
+    Router -->|Embeddings / Gen| OpenAI
     LangGraph -->|Rerank Context| Cohere
     LangGraph -->|Web Search| DDG
-    FastAPI & LangGraph & Router -->|Telemetry| LangSmith
+    FastAPI -->|Telemetry| LangSmith
+    LangGraph -->|Telemetry| LangSmith
+    Router -->|Telemetry| LangSmith
 ```
 
 ---
@@ -117,50 +120,50 @@ This sequence flowchart shows how user requests are parsed, routed, retrieved, g
 
 ```mermaid
 flowchart TD
-    Start([🧑‍💻 User Query]) --> Contextualize{📜 Has Chat History?}
-    Contextualize -->|Yes| RewriteQ["🤖 GPT-4o-mini\n(Generate Standalone Question)"]
+    Start(["🧑‍💻 User Query"]) --> Contextualize{"📜 Has Chat History?"}
+    Contextualize -->|Yes| RewriteQ["🤖 GPT-4o-mini<br/>(Generate Standalone Question)"]
     Contextualize -->|No| UseOriginal["Use Original Question"]
     
     RewriteQ --> RouteStep
     UseOriginal --> RouteStep
     
-    RouteStep[🔮 Router Classifies Query] --> RouteDecision{Select Route}
+    RouteStep["🔮 Router Classifies Query"] --> RouteDecision{"Select Route"}
     
     %% Fast Path
-    RouteDecision -->|⚡ simple| FastPath[🚀 Fast Path Bypass]
-    FastPath --> FastRetrieve[Basic Retrieve k=3]
-    FastRetrieve --> FastGen[🤖 GPT-4o-mini Q&A]
+    RouteDecision -->|⚡ simple| FastPath["🚀 Fast Path Bypass"]
+    FastPath --> FastRetrieve["Basic Retrieve k=3"]
+    FastRetrieve --> FastGen["🤖 GPT-4o-mini Q&A"]
     FastGen --> EndResponse
     
     %% Heavy Path
-    RouteDecision -->|🧠 complex / multi-hop| Analyzer[🔬 Pydantic Query Analyzer]
-    Analyzer --> ExtractedFilters[🎯 Extracted Metadata Filters]
-    ExtractedFilters --> HybridSearch[🔀 Hybrid Retrieve: FAISS + BM25 + RRF]
+    RouteDecision -->|🧠 complex / multi-hop| Analyzer["🔬 Pydantic Query Analyzer"]
+    Analyzer --> ExtractedFilters["🎯 Extracted Metadata Filters"]
+    ExtractedFilters --> HybridSearch["🔀 Hybrid Retrieve: FAISS + BM25 + RRF"]
     
-    HybridSearch --> DecisionWorkflow{Route Type?}
+    HybridSearch --> DecisionWorkflow{"Route Type?"}
     
     %% Decomposition
-    DecisionWorkflow -->|decomposition| GraphDec[🕸️ LangGraph Multi-Hop Agent]
-    GraphDec --> SubQ[Decompose Sub-Questions]
-    SubQ --> SequentialAns[Answer Sequentially with Context Memory]
-    SequentialAns --> Synthesis[Synthesize Final Answer]
+    DecisionWorkflow -->|decomposition| GraphDec["🕸️ LangGraph Multi-Hop Agent"]
+    GraphDec --> SubQ["Decompose Sub-Questions"]
+    SubQ --> SequentialAns["Answer Sequentially with Context Memory"]
+    SequentialAns --> Synthesis["Synthesize Final Answer"]
     
     %% Standard / CRAG / Self-RAG
-    DecisionWorkflow -->|standard / fusion / step_back / hyde| GraphCRAG[🕸️ LangGraph Self-Correcting Agent]
-    GraphCRAG --> Grader[⚖️ Grade Retrieved Documents]
-    Grader -->|❌ Irrelevant| Rewriter[✏️ Query Rewriter]
-    Rewriter --> WebSearch[🌐 DuckDuckGo Web Search]
+    DecisionWorkflow -->|standard / fusion / step_back / hyde| GraphCRAG["🕸️ LangGraph Self-Correcting Agent"]
+    GraphCRAG --> Grader["⚖️ Grade Retrieved Documents"]
+    Grader -->|❌ Irrelevant| Rewriter["✏️ Query Rewriter"]
+    Rewriter --> WebSearch["🌐 DuckDuckGo Web Search"]
     WebSearch --> GenResponse
     
-    Grader -->|✅ Relevant| GenResponse[💡 Generate Grounded Response]
+    Grader -->|✅ Relevant| GenResponse["💡 Generate Grounded Response"]
     
-    GenResponse --> SelfReflect{🪞 Hallucination Grader}
+    GenResponse --> SelfReflect{"🪞 Hallucination Grader"}
     SelfReflect -->|⚠️ Hallucinated| Rewriter
-    SelfReflect -->|✅ Grounded| AnswerRelevance{✅ Answer Grader}
+    SelfReflect -->|✅ Grounded| AnswerRelevance{"✅ Answer Grader"}
     AnswerRelevance -->|❌ Off-Topic| Rewriter
     AnswerRelevance -->|✅ Addresses Q| Synthesis
     
-    Synthesis --> EndResponse([🎯 Final Response + Citations])
+    Synthesis --> EndResponse(["🎯 Final Response + Citations"])
 ```
 
 ---
@@ -217,14 +220,14 @@ rag_project/
 ├── pyproject.toml          # Project dependencies, linter settings, and metadata (uv-managed)
 ├── requirements.txt        # Package locking file for pinning versions
 │
-├── app.py                  # FastAPI server and application endpoints
-├── main.py                 # Core setup logic and CLI execution loop
-├── ingest.py               # Ingest pipeline (semantic splitting, GMM/RAPTOR index creation)
-├── query_processor.py      # Embedding classifier and Pydantic SearchQuery analyzer
-├── agentic_graph.py        # LangGraph CRAG and Self-RAG state-graph
-├── decomposition_graph.py  # LangGraph multi-hop sequential decomposition agent
-├── multi_rep_utils.py      # Multi-Representation Indexing utilities
-└── playground.py           # Diagnostic script for quick token and cosine checks
+└── src/
+    ├── app.py              # FastAPI server and application endpoints
+    ├── main.py             # Core setup logic and CLI execution loop
+    ├── ingest.py           # Ingest pipeline (semantic splitting, GMM/RAPTOR index creation)
+    ├── query_processor.py  # Embedding classifier and Pydantic SearchQuery analyzer
+    ├── agentic_graph.py    # LangGraph CRAG and Self-RAG state-graph
+    ├── decomposition_graph.py # LangGraph multi-hop sequential decomposition agent
+    └── multi_rep_utils.py  # Multi-Representation Indexing utilities
 ```
 
 ---
@@ -264,24 +267,24 @@ rag_project/
 Place your files in `./documents/`, then run the parser:
 ```bash
 # Standard Ingestion & Semantic Chunking
-uv run ingest.py
+uv run python -m src.ingest
 
 # Advanced Ingestion (RAPTOR clustering tree enabled)
-uv run ingest.py --raptor
+uv run python -m src.ingest --raptor
 ```
 
 ### CLI Execution
 
 To run queries directly in your terminal:
 ```bash
-uv run main.py
+uv run python -m src.main
 ```
 
 ### FastAPI Server Execution
 
 To run the FastAPI server locally:
 ```bash
-uv run app.py
+uv run python -m src.app
 ```
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser to access the dashboard.
 

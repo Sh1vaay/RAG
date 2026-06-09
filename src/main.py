@@ -13,8 +13,8 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from multi_rep_utils import restore_original_content
-from query_processor import QueryAnalyzer, RoutingRetriever, SearchQuery, compute_rrf
+from .multi_rep_utils import restore_original_content
+from .query_processor import QueryAnalyzer, RoutingRetriever, SearchQuery, compute_rrf
 
 
 def post_filter_documents(docs: list, query: SearchQuery) -> list:
@@ -335,7 +335,7 @@ def main():
 
                 # 4. Execute Route
                 if route == "decomposition":
-                    from decomposition_graph import create_decomposition_graph
+                    from .decomposition_graph import create_decomposition_graph
 
                     # Build and execute the cyclic LangGraph decomposition agent
                     graph = create_decomposition_graph(compression_retriever, llm)
@@ -376,7 +376,7 @@ def main():
                     print(
                         "🤖 [Agentic RAG] Complex query detected. Activating CRAG/Self-RAG loop..."
                     )
-                    from agentic_graph import create_agentic_graph
+                    from .agentic_graph import create_agentic_graph
 
                     agentic = create_agentic_graph(compression_retriever, llm)
                     agentic_state = agentic.invoke(
