@@ -1,24 +1,27 @@
-import os
-import sys
 import glob
+import os
 import re
+import sys
+
 import bs4
 from dotenv import load_dotenv
 from langchain_community.document_loaders import (
-    WebBaseLoader,
-    PyPDFLoader,
     CSVLoader,
     Docx2txtLoader,
-    TextLoader
+    PyPDFLoader,
+    TextLoader,
+    WebBaseLoader,
 )
-from langchain_experimental.text_splitter import SemanticChunker
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
 from multi_rep_utils import generate_summaries
 
 # Load environment variables from .env file
 load_dotenv()
+
 
 # ── RAPTOR: Cluster + summarise helper ────────────────────────────────────────
 def build_raptor_layer(splits: list, embeddings: OpenAIEmbeddings, llm: ChatOpenAI) -> list:
@@ -31,10 +34,12 @@ def build_raptor_layer(splits: list, embeddings: OpenAIEmbeddings, llm: ChatOpen
     """
     try:
         import numpy as np
-        from sklearn.mixture import GaussianMixture
         from langchain_core.prompts import ChatPromptTemplate
+        from sklearn.mixture import GaussianMixture
     except ImportError:
-        print("[WARNING] scikit-learn not installed. Skipping RAPTOR. Run: uv sync", file=sys.stderr)
+        print(
+            "[WARNING] scikit-learn not installed. Skipping RAPTOR. Run: uv sync", file=sys.stderr
+        )
         return []
 
     all_summaries = []
@@ -44,7 +49,10 @@ def build_raptor_layer(splits: list, embeddings: OpenAIEmbeddings, llm: ChatOpen
 
     while level <= max_levels:
         if len(current_docs) < 4:
-            print(f"🌲 [RAPTOR] Level {level}: Too few nodes ({len(current_docs)}) to cluster. Stopping tree growth.")
+            print(
+                f"🌲 [RAPTOR] Level {level}: Too few nodes ({len(current_docs)}) "
+                "to cluster. Stopping tree growth."
+            )
             break
 
         print(f"🌲 [RAPTOR] Level {level}: Embedding {len(current_docs)} nodes for clustering...")
@@ -71,49 +79,59 @@ def build_raptor_layer(splits: list, embeddings: OpenAIEmbeddings, llm: ChatOpen
             print(f"[ERROR] RAPTOR GMM fitting failed: {exc}", file=sys.stderr)
             break
 
-        cluster_prompt = ChatPromptTemplate.from_messages([
-            ("system",
-             "You are a technical summariser. Given a group of related text passages, "
-             "write a concise 2-3 sentence thematic summary that captures the shared topic. "
-             "Output only the summary, no preamble."),
-            ("human", "{passages}")
-        ])
+        cluster_prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    "You are a technical summariser. Given a group of related text passages, "
+                    "write a concise 2-3 sentence thematic summary that captures the shared topic. "
+                    "Output only the summary, no preamble.",
+                ),
+                ("human", "{passages}"),
+            ]
+        )
         cluster_chain = cluster_prompt | llm
 
         level_summaries = []
         for cluster_id in range(n_clusters):
-            indices = [i for i, l in enumerate(labels) if l == cluster_id]
+            indices = [i for i, lbl in enumerate(labels) if lbl == cluster_id]
             if not indices:
                 continue
             passages = "\n\n".join(current_docs[i].page_content[:400] for i in indices[:8])
             try:
                 summary = cluster_chain.invoke({"passages": passages}).content.strip()
             except Exception as exc:
-                print(f"[WARNING] RAPTOR Level {level} cluster {cluster_id} summary failed: {exc}", file=sys.stderr)
+                print(
+                    f"[WARNING] RAPTOR Level {level} cluster {cluster_id} summary failed: {exc}",
+                    file=sys.stderr,
+                )
                 continue
 
-            level_summaries.append(Document(
-                page_content=summary,
-                metadata={
-                    "layer": f"raptor_summary_level_{level}",
-                    "cluster_id": cluster_id,
-                    "source": "raptor",
-                    "file_type": "raptor",
-                    "year": 0,
-                    "page": 0,
-                    "row": 0,
-                    "data_source": "internal_docs",
-                }
-            ))
+            level_summaries.append(
+                Document(
+                    page_content=summary,
+                    metadata={
+                        "layer": f"raptor_summary_level_{level}",
+                        "cluster_id": cluster_id,
+                        "source": "raptor",
+                        "file_type": "raptor",
+                        "year": 0,
+                        "page": 0,
+                        "row": 0,
+                        "data_source": "internal_docs",
+                    },
+                )
+            )
 
         print(f"✅ [RAPTOR] Level {level} created {len(level_summaries)} summaries.")
         all_summaries.extend(level_summaries)
-        
+
         # Prepare next level to cluster these summaries
         current_docs = level_summaries
         level += 1
 
     return all_summaries
+
 
 def load_single_document(file_path: str):
     """Loads a single document based on its file extension using LangChain loaders."""
@@ -129,19 +147,26 @@ def load_single_document(file_path: str):
     else:
         print(f"[WARNING] Unsupported file type: {file_path}. Skipping.")
         return []
-    
+
     try:
         return loader.load()
     except Exception as e:
         print(f"[ERROR] Failed to load {file_path}: {e}", file=sys.stderr)
         return []
 
+
 def ingest_data():
     # 1. Validation
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key or api_key == "your_openai_api_key_here":
-        print("[ERROR] OPENAI_API_KEY is not set or is still the default placeholder value in .env.", file=sys.stderr)
-        print("Please set your OpenAI API key in the .env file before running ingest.py.", file=sys.stderr)
+        print(
+            "[ERROR] OPENAI_API_KEY is not set or is still the default placeholder value in .env.",
+            file=sys.stderr,
+        )
+        print(
+            "Please set your OpenAI API key in the .env file before running ingest.py.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     documents_dir = "./documents"
@@ -154,7 +179,7 @@ def ingest_data():
     for ext in ("*.pdf", "*.csv", "*.docx", "*.txt", "*.md"):
         files.extend(glob.glob(os.path.join(documents_dir, ext)))
         files.extend(glob.glob(os.path.join(documents_dir, ext.upper())))
-    
+
     # Remove duplicates from glob casing match
     files = sorted(list(set(files)))
 
@@ -180,7 +205,10 @@ def ingest_data():
             )
             docs = loader.load()
         except Exception as e:
-            print(f"[ERROR] Failed to fetch or parse web document from {target_url}: {e}", file=sys.stderr)
+            print(
+                f"[ERROR] Failed to fetch or parse web document from {target_url}: {e}",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
     if not docs:
@@ -208,12 +236,12 @@ def ingest_data():
                 doc.metadata["file_type"] = "unknown"
 
         # 2. Extract publication or creation year
-        year_match = re.search(r'\b(19\d\d|20\d\d)\b', source)
+        year_match = re.search(r"\b(19\d\d|20\d\d)\b", source)
         if year_match:
             doc.metadata["year"] = int(year_match.group(1))
         else:
             doc.metadata["year"] = 0
-            
+
         # 3. Ensure page/row standard types (convert page to 1-indexed)
         if "page" in doc.metadata:
             try:
@@ -268,15 +296,16 @@ def ingest_data():
 
     print("Embedding and saving to FAISS database...")
     try:
-        db = FAISS.from_documents(
-            documents=final_docs,
-            embedding=embeddings
-        )
+        db = FAISS.from_documents(documents=final_docs, embedding=embeddings)
         db.save_local("faiss_db")
         print("Ingestion complete. Database successfully saved to ./faiss_db")
     except Exception as e:
-        print(f"[ERROR] Failed to generate embeddings or write to FAISS database: {e}", file=sys.stderr)
+        print(
+            f"[ERROR] Failed to generate embeddings or write to FAISS database: {e}",
+            file=sys.stderr,
+        )
         sys.exit(1)
+
 
 if __name__ == "__main__":
     ingest_data()

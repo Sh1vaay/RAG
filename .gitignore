@@ -37,3 +37,6 @@ Thumbs.db
 diagnostic.py
 diagnostic_out.txt
 test_imports.log
+
+# Linter caches
+.ruff_cache/

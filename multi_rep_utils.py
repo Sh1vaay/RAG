@@ -8,25 +8,26 @@ one-line LLM summaries and store the original chunk text inside metadata.
 At retrieval time we swap the summary back for the full original content
 so the LLM still sees rich context when generating the answer.
 """
-
 import sys
 from typing import List
+
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-
 # ── Prompt used to summarise each chunk ──────────────────────────────────────
-_SUMMARY_PROMPT = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        "You are a technical summariser. Write a single concise sentence "
-        "(max 30 words) that captures the core idea of the following text. "
-        "Do NOT start with 'This document' or 'This text'. "
-        "Output the sentence only — no preamble, no punctuation at the end.",
-    ),
-    ("human", "{text}"),
-])
+_SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You are a technical summariser. Write a single concise sentence "
+            "(max 30 words) that captures the core idea of the following text. "
+            "Do NOT start with 'This document' or 'This text'. "
+            "Output the sentence only — no preamble, no punctuation at the end.",
+        ),
+        ("human", "{text}"),
+    ]
+)
 
 
 def generate_summaries(splits: List[Document], llm: ChatOpenAI) -> List[Document]:
@@ -52,8 +53,7 @@ def generate_summaries(splits: List[Document], llm: ChatOpenAI) -> List[Document
         responses = chain.batch(inputs, config={"max_concurrency": 10})
     except Exception as exc:
         print(
-            f"[WARNING] Multi-Rep summary batch failed: {exc}. "
-            "Falling back to raw chunks.",
+            f"[WARNING] Multi-Rep summary batch failed: {exc}. Falling back to raw chunks.",
             file=sys.stderr,
         )
         return splits  # graceful fallback — use raw chunks as-is
