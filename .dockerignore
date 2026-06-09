@@ -1,0 +1,24 @@
+# Git
+.git
+.github
+
+# Virtual Environments
+.venv
+venv
+
+# Secrets and Local configurations
+.env
+.env.*
+
+# Local Databases and dynamic inputs
+faiss_db/
+documents/*
+!documents/.gitkeep
+
+# Python cache and temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

@@ -168,10 +168,20 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
     def generate(state: AgenticState) -> dict:
         print("💬 [Agentic: Generate Answer]")
         docs = state["relevant_docs"] or state["retrieved_docs"]
-        context = "\n\n".join(
-            f"Source: {d.metadata.get('source', 'Unknown')}\n{d.page_content}"
-            for d in docs
-        )
+        context_parts = []
+        for d in docs:
+            src = d.metadata.get("source", "Unknown")
+            context_parts.append(f"Source: {src}\n{d.page_content}")
+        context = "\n\n".join(context_parts)
+        
+        retry = state.get("retry_count", 0)
+        # Add feedback instruction on retry to break deterministic temp=0 loops
+        if retry > 0:
+            context += (
+                "\n\n[CRITICAL NOTICE: A previous generation failed relevance or grounding validation. "
+                "Ensure the new response is strictly grounded in the provided sources and does not extrapolate.]"
+            )
+            
         try:
             answer = gen_chain.invoke({
                 "question": state.get("rewritten_question") or state["question"],
@@ -180,7 +190,6 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
         except Exception as exc:
             print(f"[ERROR] Generation failed: {exc}", file=sys.stderr)
             answer = "I was unable to generate an answer."
-        retry = state.get("retry_count", 0)
         return {"answer": answer, "retry_count": retry}
 
     def reflect(state: AgenticState) -> dict:

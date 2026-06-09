@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Aether AI - Premium RAG Engine</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Outfit:wght@500;600;900&family=JetBrains+Mono:wght@400&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "inverse-surface": "#283044",
+                        "surface-bright": "#faf8ff",
+                        "on-background": "#131b2e",
+                        "outline": "#767586",
+                        "glass-border": "rgba(255, 255, 255, 0.5)",
+                        "on-primary": "#ffffff",
+                        "primary-container": "#6063ee",
+                        "surface-container-highest": "#dae2fd",
+                        "inverse-primary": "#c0c1ff",
+                        "outline-variant": "#c7c4d7",
+                        "on-surface": "#131b2e",
+                        "secondary-fixed": "#f0dbff",
+                        "surface-dim": "#d2d9f4",
+                        "error-container": "#ffdad6",
+                        "on-error": "#ffffff",
+                        "surface-variant": "#dae2fd",
+                        "surface-tint": "#494bd6",
+                        "inverse-on-surface": "#eef0ff",
+                        "secondary": "#831ada",
+                        "secondary-container": "#9e41f5",
+                        "primary": "#4648d4",
+                        "on-surface-variant": "#464554",
+                        "glass-bg": "rgba(255, 255, 255, 0.4)",
+                        "surface": "#faf8ff",
+                        "surface-container-low": "#f2f3ff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container": "#eaedff",
+                        "surface-container-high": "#e2e7ff",
+                        "background": "#faf8ff"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1rem",
+                        "3xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "sidebar-width": "280px"
+                    },
+                    fontFamily: {
+                        "label-md": ["Inter"],
+                        "code-sm": ["JetBrains Mono"],
+                        "headline-md": ["Outfit"],
+                        "display-lg": ["Outfit"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #faf8ff;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,100%,90%,1) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, hsla(285,100%,88%,1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, hsla(227,100%,88%,1) 0px, transparent 50%),
+                radial-gradient(at 0% 100%, hsla(253,100%,90%,1) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+
+        .glass-button-primary {
+            background: linear-gradient(135deg, #6063ee, #831ada);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 15px rgba(96, 99, 238, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .glass-button-primary:hover {
+            box-shadow: 0 6px 20px rgba(96, 99, 238, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .glass-dropzone {
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px dashed rgba(96, 99, 238, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .glass-dropzone:hover {
+            background: rgba(255, 255, 255, 0.5);
+            border-color: rgba(96, 99, 238, 0.7);
+        }
+
+        .glow-point {
+            box-shadow: 0 0 12px 2px rgba(96, 99, 238, 0.6);
+        }
+
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.1); }
+        ::-webkit-scrollbar-thumb { background: rgba(96, 99, 238, 0.3); border-radius: 3px; }
+
+        .toggle-switch {
+            appearance: none;
+            width: 44px;
+            height: 24px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 20px;
+            position: relative;
+            cursor: pointer;
+            outline: none;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            transition: background 0.3s;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .toggle-switch:checked { background: #6063ee; }
+        .toggle-switch:checked::after { transform: translateX(20px); }
+    </style>
+</head>
+<body class="text-on-surface h-screen overflow-hidden flex font-body-md selection:bg-primary/20 selection:text-primary">
+    
+    <!-- SideNavBar -->
+    <nav class="hidden md:flex flex-col h-screen p-6 gap-8 fixed left-0 w-sidebar-width bg-glass-bg border-r border-glass-border backdrop-blur-md shadow-sm z-50">
+        <div class="flex items-center gap-3 px-2">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary to-secondary flex items-center justify-center text-white shadow-md">
+                <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+            </div>
+            <div>
+                <h1 class="font-headline-md text-[20px] font-bold tracking-tight">Aether AI</h1>
+                <p class="font-label-md text-[12px] text-on-surface-variant">Premium RAG Engine</p>
+            </div>
+        </div>
+        
+        <button onclick="clearChat()" class="w-full py-3 px-4 rounded-xl glass-button-primary font-label-md flex items-center justify-center gap-2 active:scale-95">
+            <span class="material-symbols-outlined text-[20px]">add</span>
+            New Session
+        </button>
+
+        <div class="flex-1 flex flex-col gap-2 mt-4">
+            <button id="tab-chat" onclick="switchTab('chat')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-primary font-bold bg-white/60 shadow-sm border border-white/50 transition-all duration-300">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">forum</span>
+                <span class="font-label-md">Chat</span>
+            </button>
+            <button id="tab-docs" onclick="switchTab('docs')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-white/40 transition-all duration-300">
+                <span class="material-symbols-outlined">description</span>
+                <span class="font-label-md">Documents</span>
+            </button>
+            <button id="tab-status" onclick="switchTab('status')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-white/40 transition-all duration-300">
+                <span class="material-symbols-outlined">analytics</span>
+                <span class="font-label-md">Status</span>
+            </button>
+            <button id="tab-settings" onclick="switchTab('settings')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-white/40 transition-all duration-300">
+                <span class="material-symbols-outlined">settings</span>
+                <span class="font-label-md">Settings</span>
+            </button>
+        </div>
+
+        <div class="flex flex-col gap-2 pt-4 border-t border-glass-border">
+            <button class="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-white/40 transition-all duration-300">
+                <span class="material-symbols-outlined text-[20px]">help_outline</span>
+                <span class="font-label-md">Support</span>
+            </button>
+            <button class="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error-container/50 transition-all duration-300">
+                <span class="material-symbols-outlined text-[20px]">logout</span>
+                <span class="font-label-md">Sign Out</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Workspace -->
+    <main class="flex-grow ml-0 md:ml-[280px] flex flex-col h-full relative">
+        
+        <!-- View 1: Chat Playground -->
+        <div id="view-chat" class="flex-grow flex overflow-hidden w-full max-w-[1600px] mx-auto p-4 md:p-8 gap-6 relative">
+            
+            <div class="flex-grow flex flex-col min-w-0 glass-panel rounded-3xl relative overflow-hidden bg-white/40">
+                <div class="h-14 border-b border-white/40 flex items-center justify-between px-6 bg-white/60 backdrop-blur-md z-10 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="w-2 h-2 rounded-full bg-green-500 glow-point"></div>
+                        <span class="font-label-md text-on-surface-variant text-[13px]">System Live</span>
+                        <span class="text-outline-variant">|</span>
+                        <span id="route-indicator" class="font-label-md text-primary font-bold flex items-center gap-1 text-[13px] uppercase">
+                            <span class="material-symbols-outlined text-[16px]">model_training</span>
+                            READY
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex-grow overflow-y-auto hide-scrollbar p-6 flex flex-col gap-8 pb-32" id="chat-messages">
+                    <div class="flex gap-4 max-w-3xl">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-secondary flex items-center justify-center shadow-sm shrink-0 mt-1">
+                            <span class="material-symbols-outlined text-white text-[16px]" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+                        </div>
+                        <div class="flex flex-col gap-2 w-full">
+                            <div class="glass-panel p-5 rounded-2xl rounded-tl-sm text-on-surface bg-white/80">
+                                <p class="mb-4 text-[15px] leading-relaxed">Welcome to **Aether AI**. Ask questions regarding your ingested documents. I support **Semantic routing**, **Multi-Representation indexing**, **RAPTOR clustering**, and **Self-RAG agent loops** out-of-the-box.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-3xl z-20">
+                    <div class="flex gap-2 mb-3 overflow-x-auto hide-scrollbar pb-1 px-2">
+                        <button onclick="useSuggestion('Summarize the key takeaways from the documents.')" class="whitespace-nowrap px-4 py-1.5 rounded-full glass-panel bg-white/90 text-[13px] font-medium text-on-surface hover:bg-white shadow-sm flex items-center gap-1.5 border-white">
+                            <span class="material-symbols-outlined text-[16px] text-primary">auto_awesome</span> Summarize docs
+                        </button>
+                        <button onclick="useSuggestion('Perform a comparative analysis of the methods mentioned.')" class="whitespace-nowrap px-4 py-1.5 rounded-full glass-panel bg-white/90 text-[13px] font-medium text-on-surface hover:bg-white shadow-sm flex items-center gap-1.5 border-white">
+                            <span class="material-symbols-outlined text-[16px] text-secondary">compare_arrows</span> Compare methods
+                        </button>
+                    </div>
+                    
+                    <div class="glass-panel bg-white/90 rounded-[2rem] p-2 flex items-center gap-2 shadow-[0_12px_32px_rgba(0,0,0,0.06)] border-white focus-within:border-primary/40 focus-within:bg-white transition-all duration-300">
+                        <textarea id="chat-input" class="flex-grow bg-transparent border-none focus:ring-0 resize-none py-3 px-4 max-h-32 text-on-surface placeholder:text-outline-variant font-body-md" placeholder="Message Aether..." rows="1" onkeydown="handleChatKey(event)"></textarea>
+                        <button onclick="sendChatMessage()" class="w-10 h-10 shrink-0 rounded-full bg-primary text-white flex items-center justify-center shadow-md hover:shadow-lg hover:bg-primary-container transition-all mr-1">
+                            <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">arrow_upward</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Citations Drawer -->
+            <div class="w-80 glass-panel rounded-3xl hidden lg:flex flex-col overflow-hidden shrink-0 bg-white/50 border-white/60">
+                <div class="h-14 border-b border-white/40 flex items-center justify-between px-5 bg-white/60 backdrop-blur-md shrink-0">
+                    <h3 class="font-headline-md text-base font-semibold text-on-surface flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px] text-primary">library_books</span>
+                        Sources
+                    </h3>
+                </div>
+                <div class="flex-grow overflow-y-auto hide-scrollbar p-4 flex flex-col gap-4" id="sources-container">
+                    <p class="text-xs text-on-surface-variant/70 text-center mt-8">No active sources used.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- View 2: Document Hub -->
+        <div id="view-docs" class="flex-1 p-8 min-h-screen flex flex-col gap-8 hidden">
+            <header class="flex justify-between items-end mb-2">
+                <div>
+                    <h2 class="font-headline-md text-[32px] font-bold text-on-surface">Document Hub</h2>
+                    <p class="font-body-md text-on-surface-variant mt-2 max-w-2xl">Manage your knowledge base. Upload, structure, and monitor vector embeddings for the Aether engine.</p>
+                </div>
+                <div class="glass-panel px-4 py-2 rounded-full flex items-center gap-2 bg-white/60">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500 glow-point"></div>
+                    <span class="font-label-md text-[13px] font-medium text-on-surface">Engine Online</span>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1">
+                <!-- Left Column -->
+                <div class="xl:col-span-8 flex flex-col gap-6">
+                    <!-- Dropzone -->
+                    <div onclick="triggerFileSelect()" class="glass-dropzone rounded-2xl p-12 flex flex-col items-center justify-center text-center cursor-pointer min-h-[240px] relative overflow-hidden group bg-white/40">
+                        <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                            <span class="material-symbols-outlined text-4xl text-primary">cloud_upload</span>
+                        </div>
+                        <h3 class="font-headline-md text-[20px] font-bold text-on-surface mb-2">Drag & Drop Documents</h3>
+                        <p class="font-body-md text-[14px] text-on-surface-variant mb-6">Supports PDF, TXT, DOCX, and MD up to 50MB</p>
+                        <input id="hidden-file-input" type="file" multiple class="hidden" onchange="handleFileSelect(event)"/>
+                        <button class="px-6 py-2.5 rounded-full glass-panel font-label-md text-[14px] font-medium hover:bg-white shadow-sm border border-white transition-colors bg-white/80 text-primary">
+                            Browse Files
+                        </button>
+                    </div>
+
+                    <!-- Staged Documents -->
+                    <div class="glass-panel rounded-2xl p-6 flex-1 flex flex-col bg-white/60">
+                        <div class="flex justify-between items-center mb-6 border-b border-glass-border pb-4">
+                            <h3 class="font-headline-md text-[18px] font-bold text-on-surface">Staged for Ingestion</h3>
+                        </div>
+                        <div class="overflow-x-auto flex-1">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-glass-border">
+                                        <th class="pb-3 font-label-md text-[13px] text-on-surface-variant font-medium">Filename</th>
+                                        <th class="pb-3 font-label-md text-[13px] text-on-surface-variant font-medium">Size</th>
+                                        <th class="pb-3 font-label-md text-[13px] text-on-surface-variant font-medium text-right">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staged-files-list">
+                                    <tr><td colspan="3" class="py-8 text-center text-on-surface-variant text-[13px]">No files staged.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div class="xl:col-span-4 flex flex-col gap-6">
+                    <div class="glass-panel rounded-2xl p-6 bg-white/60">
+                        <div class="flex items-center gap-3 mb-6">
+                            <span class="material-symbols-outlined text-primary">tune</span>
+                            <h3 class="font-headline-md text-[18px] font-bold text-on-surface">Pipeline Config</h3>
+                        </div>
+                        <div class="flex flex-col gap-6">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <h4 class="font-label-md text-[14px] font-semibold text-on-surface">RAPTOR Summaries</h4>
+                                    <p class="font-body-md text-[12px] text-on-surface-variant mt-0.5">Hierarchical tree abstraction</p>
+                                </div>
+                                <input id="raptor-toggle" type="checkbox" class="toggle-switch"/>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <h4 class="font-label-md text-[14px] font-semibold text-on-surface">Semantic Chunking</h4>
+                                    <p class="font-body-md text-[12px] text-on-surface-variant mt-0.5">Meaning-based boundaries</p>
+                                </div>
+                                <input type="checkbox" checked disabled class="toggle-switch opacity-60 cursor-not-allowed"/>
+                            </div>
+                            
+                            <button onclick="triggerIngest()" id="ingest-btn" class="w-full mt-4 py-3.5 rounded-xl glass-button-primary font-label-md font-semibold flex justify-center items-center gap-2">
+                                <span class="material-symbols-outlined text-[20px]">rocket_launch</span>
+                                Start Ingestion
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Console -->
+                    <div class="glass-panel rounded-2xl flex-1 flex flex-col min-h-[300px] overflow-hidden bg-white/60">
+                        <div class="bg-white/40 px-4 py-3 border-b border-glass-border flex justify-between items-center">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">terminal</span>
+                                <h3 class="font-label-md text-[13px] font-bold text-on-surface">Real-time Console</h3>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                                <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                                <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                            </div>
+                        </div>
+                        <div id="console-output" class="p-4 flex-1 overflow-y-auto font-code-sm text-[12px] text-[#4648d4]">
+                            <div class="text-on-surface-variant opacity-70 mb-2">System initialized. Waiting for task...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View 3: System Status -->
+        <div id="view-status" class="flex-1 p-8 min-h-screen flex flex-col gap-8 hidden">
+            <header class="mb-4">
+                <h2 class="font-headline-md text-[32px] font-bold text-on-surface">System Status</h2>
+                <p class="font-body-md text-on-surface-variant mt-2 max-w-2xl">Real-time monitoring of RAG infrastructure, model latency, and retrieval pipeline analytics.</p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="glass-panel p-6 rounded-2xl bg-white/60">
+                    <div class="flex items-center gap-3 text-primary mb-3">
+                        <span class="material-symbols-outlined text-[20px]">dns</span>
+                        <span class="font-label-md text-[13px] font-semibold">Database Health</span>
+                    </div>
+                    <p id="status-db-state" class="font-headline-md text-[24px] font-bold text-on-surface">Active</p>
+                </div>
+                <div class="glass-panel p-6 rounded-2xl bg-white/60">
+                    <div class="flex items-center gap-3 text-secondary mb-3">
+                        <span class="material-symbols-outlined text-[20px]">layers</span>
+                        <span class="font-label-md text-[13px] font-semibold">Vector Chunks</span>
+                    </div>
+                    <p id="status-db-chunks" class="font-headline-md text-[24px] font-bold text-on-surface">0</p>
+                </div>
+                <div class="glass-panel p-6 rounded-2xl bg-white/60">
+                    <div class="flex items-center gap-3 text-[#494bd6] mb-3">
+                        <span class="material-symbols-outlined text-[20px]">share</span>
+                        <span class="font-label-md text-[13px] font-semibold">Routing Engine</span>
+                    </div>
+                    <p id="status-routing" class="font-headline-md text-[20px] font-bold text-on-surface truncate">Semantic</p>
+                </div>
+                <div class="glass-panel p-6 rounded-2xl bg-white/60">
+                    <div class="flex items-center gap-3 text-[#831ada] mb-3">
+                        <span class="material-symbols-outlined text-[20px]">insights</span>
+                        <span class="font-label-md text-[13px] font-semibold">Tracing Logs</span>
+                    </div>
+                    <p id="status-tracing" class="font-headline-md text-[24px] font-bold text-on-surface">Active</p>
+                </div>
+            </div>
+
+            <div class="glass-panel p-8 rounded-3xl mt-2 bg-white/60">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <h3 class="font-headline-md text-[20px] font-bold text-on-surface">Trace Analytics</h3>
+                        <p class="text-[13px] text-on-surface-variant mt-1">Live LangGraph execution flow</p>
+                    </div>
+                </div>
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4 py-8 relative">
+                    <div class="absolute top-1/2 left-0 w-full h-1 bg-gradient-to-r from-primary/20 via-secondary/40 to-primary/20 -translate-y-1/2 rounded-full z-0 hidden md:block"></div>
+                    
+                    <div class="glass-panel bg-white p-5 rounded-2xl w-40 text-center z-10 shadow-sm border border-primary/10">
+                        <div class="w-10 h-10 mx-auto bg-primary/10 rounded-full flex items-center justify-center text-primary mb-3">
+                            <span class="material-symbols-outlined">login</span>
+                        </div>
+                        <h4 class="font-bold text-[13px] text-on-surface">User Query</h4>
+                        <p class="text-[11px] text-on-surface-variant mt-1">Pydantic parsed</p>
+                    </div>
+                    <div class="glass-panel bg-white p-5 rounded-2xl w-40 text-center z-10 shadow-sm border border-secondary/10">
+                        <div class="w-10 h-10 mx-auto bg-secondary/10 rounded-full flex items-center justify-center text-secondary mb-3">
+                            <span class="material-symbols-outlined">search</span>
+                        </div>
+                        <h4 class="font-bold text-[13px] text-on-surface">Vector Search</h4>
+                        <p class="text-[11px] text-on-surface-variant mt-1">FAISS Retrieval</p>
+                    </div>
+                    <div class="glass-panel bg-white p-5 rounded-2xl w-40 text-center z-10 shadow-sm border border-primary/10">
+                        <div class="w-10 h-10 mx-auto bg-[#494bd6]/10 rounded-full flex items-center justify-center text-[#494bd6] mb-3">
+                            <span class="material-symbols-outlined">filter_list</span>
+                        </div>
+                        <h4 class="font-bold text-[13px] text-on-surface">Context Rerank</h4>
+                        <p class="text-[11px] text-on-surface-variant mt-1">Flashrank Cross</p>
+                    </div>
+                    <div class="glass-panel bg-white p-5 rounded-2xl w-40 text-center z-10 shadow-sm border border-secondary/10">
+                        <div class="w-10 h-10 mx-auto bg-[#831ada]/10 rounded-full flex items-center justify-center text-[#831ada] mb-3">
+                            <span class="material-symbols-outlined">auto_awesome</span>
+                        </div>
+                        <h4 class="font-bold text-[13px] text-on-surface">LLM Generation</h4>
+                        <p class="text-[11px] text-on-surface-variant mt-1">Final Answer</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View 4: Settings -->
+        <div id="view-settings" class="flex-1 p-8 min-h-screen flex flex-col gap-8 hidden">
+            <header class="mb-4">
+                <h2 class="font-headline-md text-[32px] font-bold text-on-surface">Configuration</h2>
+                <p class="font-body-md text-on-surface-variant mt-2 max-w-2xl">Manage system parameters and integrate external LLM APIs.</p>
+            </header>
+
+            <div class="max-w-4xl space-y-8">
+                <div class="glass-panel p-8 rounded-3xl bg-white/60">
+                    <div class="flex items-center gap-3 mb-6 border-b border-glass-border pb-4">
+                        <span class="material-symbols-outlined text-primary text-[24px]">account_tree</span>
+                        <h3 class="font-headline-md text-[20px] font-bold text-on-surface">Pipeline Configuration</h3>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <label class="block text-[13px] font-semibold text-on-surface mb-2">Routing Method</label>
+                            <select id="settings-routing" class="w-full bg-white/50 border border-white rounded-xl text-[14px] text-on-surface focus:border-primary focus:ring-0 p-3.5 shadow-sm">
+                                <option value="semantic">Semantic Embeddings</option>
+                                <option value="llm">LLM Structure</option>
+                            </select>
+                            <p class="text-[12px] text-on-surface-variant mt-2">Determines how queries are evaluated and routed.</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-[13px] font-semibold text-on-surface mb-2">Reranker Provider</label>
+                            <select id="settings-reranker" class="w-full bg-white/50 border border-white rounded-xl text-[14px] text-on-surface focus:border-primary focus:ring-0 p-3.5 shadow-sm">
+                                <option value="flashrank">Flashrank (Local)</option>
+                                <option value="cohere">Cohere API</option>
+                            </select>
+                            <p class="text-[12px] text-on-surface-variant mt-2">Model used for context scoring.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-8 rounded-3xl bg-white/60">
+                    <div class="flex items-center gap-3 mb-6 border-b border-glass-border pb-4">
+                        <span class="material-symbols-outlined text-secondary text-[24px]">vpn_key</span>
+                        <h3 class="font-headline-md text-[20px] font-bold text-on-surface">API Credentials</h3>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-[13px] font-semibold text-on-surface mb-2">OpenAI API Key <span class="text-primary font-normal bg-primary/10 px-2 py-0.5 rounded text-[11px] ml-2">Required</span></label>
+                            <input id="settings-openai-key" type="password" placeholder="sk-..." class="w-full bg-white/50 border border-white rounded-xl text-[14px] text-on-surface focus:border-primary focus:ring-0 p-3.5 shadow-sm"/>
+                        </div>
+                        <div>
+                            <label class="block text-[13px] font-semibold text-on-surface mb-2">Cohere API Key</label>
+                            <input id="settings-cohere-key" type="password" placeholder="Enter key for cloud reranking" class="w-full bg-white/50 border border-white rounded-xl text-[14px] text-on-surface focus:border-primary focus:ring-0 p-3.5 shadow-sm"/>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end pt-2">
+                    <button onclick="saveConfiguration()" class="px-8 py-3.5 rounded-xl glass-button-primary font-bold text-[14px]">
+                        Apply Configuration
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Client Logic -->
+    <script>
+        const API_BASE = window.location.origin;
+        let chatHistory = [];
+
+        window.onload = function() {
+            refreshStatus();
+            setInterval(refreshStatus, 8000);
+        };
+
+        function switchTab(tabId) {
+            const tabs = ['chat', 'docs', 'status', 'settings'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                const view = document.getElementById(`view-${t}`);
+                if (t === tabId) {
+                    btn.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-primary font-bold bg-white/60 shadow-sm border border-white/50 transition-all duration-300";
+                    view.classList.remove('hidden');
+                } else {
+                    btn.className = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-white/40 transition-all duration-300";
+                    view.classList.add('hidden');
+                }
+            });
+        }
+
+        async function refreshStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/api/status`);
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                document.getElementById('status-db-state').innerText = data.database_loaded ? 'Active' : 'Offline';
+                document.getElementById('status-db-chunks').innerText = `${data.document_chunks}`;
+                document.getElementById('status-routing').innerText = data.routing_method === 'semantic' ? 'Semantic' : 'LLM Structure';
+                document.getElementById('status-tracing').innerText = data.langsmith_tracing ? 'Active' : 'Disabled';
+
+                document.getElementById('settings-routing').value = data.routing_method;
+                document.getElementById('settings-reranker').value = data.reranker_provider;
+
+                const stagedContainer = document.getElementById('staged-files-list');
+                if (data.staged_files && data.staged_files.length > 0) {
+                    stagedContainer.innerHTML = data.staged_files.map(file => `
+                        <tr class="border-b border-glass-border/50 hover:bg-white/30 transition-colors">
+                            <td class="py-4 flex items-center gap-3">
+                                <span class="material-symbols-outlined text-primary">description</span>
+                                <span class="font-body-md font-medium text-on-surface text-[14px]">${escapeHtml(file.name)}</span>
+                            </td>
+                            <td class="py-4 font-body-md text-on-surface-variant text-[14px]">${escapeHtml(file.size)}</td>
+                            <td class="py-4 text-right">
+                                <span class="inline-flex items-center gap-1 font-label-md text-[13px] text-emerald-600 font-medium">
+                                    <span class="material-symbols-outlined text-[16px]">check_circle</span> Ready
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    stagedContainer.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-on-surface-variant text-[13px]">No files staged.</td></tr>';
+                }
+            } catch (err) {
+                console.error("Failed to fetch status:", err);
+            }
+        }
+
+        async function saveConfiguration() {
+            const routing = document.getElementById('settings-routing').value;
+            const reranker = document.getElementById('settings-reranker').value;
+            const oKey = document.getElementById('settings-openai-key').value;
+            const cKey = document.getElementById('settings-cohere-key').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        routing_method: routing,
+                        reranker_provider: reranker,
+                        openai_key: oKey,
+                        cohere_key: cKey
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert("Settings applied!");
+                    refreshStatus();
+                } else {
+                    alert(`Error: ${data.detail}`);
+                }
+            } catch (err) {
+                alert(`Network failure: ${err}`);
+            }
+        }
+
+        function handleChatKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        }
+
+        function useSuggestion(promptText) {
+            document.getElementById('chat-input').value = promptText;
+            sendChatMessage();
+        }
+
+        function clearChat() {
+            chatHistory = [];
+            document.getElementById('chat-messages').innerHTML = `
+                <div class="flex gap-4 max-w-3xl">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-secondary flex items-center justify-center shadow-sm shrink-0 mt-1">
+                        <span class="material-symbols-outlined text-white text-[16px]">smart_toy</span>
+                    </div>
+                    <div class="flex flex-col gap-2 w-full">
+                        <div class="glass-panel p-5 rounded-2xl rounded-tl-sm text-on-surface bg-white/80">
+                            <p class="text-[15px]">Chat history cleared. Ready for new queries.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('route-indicator').innerText = "READY";
+            document.getElementById('sources-container').innerHTML = '<p class="text-xs text-on-surface-variant/70 text-center mt-8">No active sources used.</p>';
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function formatMarkdown(text) {
+            const escaped = escapeHtml(text);
+            return escaped
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code class="bg-surface-dim px-1.5 py-0.5 rounded text-secondary font-code-sm text-[13px]">$1</code>')
+                .replace(/\n\n/g, '<br/><br/>')
+                .replace(/- (.*?)\n/g, '<li class="ml-4 list-disc mb-1">$1</li>');
+        }
+
+        async function sendChatMessage() {
+            const inputEl = document.getElementById('chat-input');
+            const messageText = inputEl.value.trim();
+            if (!messageText) return;
+
+            inputEl.value = '';
+
+            const messagesContainer = document.getElementById('chat-messages');
+
+            messagesContainer.innerHTML += `
+                <div class="flex gap-4 max-w-3xl self-end flex-row-reverse w-full mt-4">
+                    <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shadow-sm shrink-0 mt-1">
+                        <span class="material-symbols-outlined text-primary text-[16px]">person</span>
+                    </div>
+                    <div class="flex flex-col gap-2 w-full items-end">
+                        <div class="bg-white p-5 rounded-2xl rounded-tr-sm text-on-surface shadow-[0_8px_24px_rgba(0,0,0,0.04)] border border-white/60">
+                            <p class="text-[15px]">${escapeHtml(messageText)}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            const loadingId = 'loader-' + Date.now();
+            messagesContainer.innerHTML += `
+                <div id="${loadingId}" class="flex gap-4 max-w-3xl mt-4">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-secondary flex items-center justify-center shadow-sm shrink-0 mt-1">
+                        <span class="material-symbols-outlined text-white text-[16px]">smart_toy</span>
+                    </div>
+                    <div class="glass-panel p-4 rounded-2xl rounded-tl-sm w-24 h-12 flex items-center justify-center gap-1.5 bg-white/80">
+                        <div class="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style="animation-delay: 0ms;"></div>
+                        <div class="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style="animation-delay: 150ms;"></div>
+                        <div class="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style="animation-delay: 300ms;"></div>
+                    </div>
+                </div>
+            `;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: messageText, history: chatHistory })
+                });
+
+                document.getElementById(loadingId).remove();
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    alert(`Generation error: ${errorData.detail}`);
+                    return;
+                }
+
+                const data = await response.json();
+
+                messagesContainer.innerHTML += `
+                    <div class="flex gap-4 max-w-3xl mt-4">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-secondary flex items-center justify-center shadow-sm shrink-0 mt-1">
+                            <span class="material-symbols-outlined text-white text-[16px]">smart_toy</span>
+                        </div>
+                        <div class="flex flex-col gap-2 w-full">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-[10px] uppercase tracking-wider font-bold text-secondary bg-secondary/10 px-2 py-0.5 rounded flex items-center gap-1 border border-secondary/20">
+                                    <span class="material-symbols-outlined text-[12px]">bolt</span>
+                                    ${escapeHtml(data.route.toUpperCase())} PATH
+                                </span>
+                            </div>
+                            <div class="glass-panel p-5 rounded-2xl rounded-tl-sm text-on-surface bg-white/80 border border-white">
+                                <div class="text-[15px] leading-relaxed">${formatMarkdown(data.answer)}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                document.getElementById('route-indicator').innerText = data.route.toUpperCase();
+                
+                chatHistory.push({ role: 'user', content: messageText });
+                chatHistory.push({ role: 'assistant', content: data.answer });
+
+                const sourcesContainer = document.getElementById('sources-container');
+                if (data.sources && data.sources.length > 0) {
+                    sourcesContainer.innerHTML = data.sources.map((src, i) => `
+                        <div class="glass-panel p-4 rounded-2xl bg-white/70 hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-primary/30 group">
+                            <div class="flex items-start justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold">${i+1}</span>
+                                    <span class="text-xs font-semibold text-primary truncate max-w-[150px]">${escapeHtml(src.title)}</span>
+                                </div>
+                            </div>
+                            <p class="text-[12px] text-on-surface-variant line-clamp-3 leading-relaxed mt-2 italic">
+                                "${escapeHtml(src.snippet)}"
+                            </p>
+                            <div class="mt-3 flex gap-2">
+                                <span class="text-[10px] bg-surface-dim px-2 py-1 rounded text-on-surface-variant font-medium">Page ${escapeHtml(String(src.page || 'N/A'))}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    sourcesContainer.innerHTML = '<p class="text-xs text-on-surface-variant/70 text-center mt-8">No specific source citations used.</p>';
+                }
+
+            } catch (err) {
+                document.getElementById(loadingId).remove();
+                alert(`API Connection Failure: ${escapeHtml(String(err))}`);
+            }
+        }
+
+        function triggerFileSelect() {
+            document.getElementById('hidden-file-input').click();
+        }
+
+        async function handleFileSelect(event) {
+            const files = event.target.files;
+            if (files.length === 0) return;
+
+            const consoleEl = document.getElementById('console-output');
+            consoleEl.innerHTML += `<div class="console-text mb-1">> Staging ${files.length} files...</div>`;
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (res.ok) {
+                    consoleEl.innerHTML += `<div class="text-emerald-500 mb-1">  [✓] Upload Success: ${escapeHtml(data.uploaded_files.join(', '))}</div>`;
+                    refreshStatus();
+                } else {
+                    consoleEl.innerHTML += `<div class="text-red-500 mb-1">  [x] Upload failed: ${escapeHtml(data.detail)}</div>`;
+                }
+            } catch (err) {
+                consoleEl.innerHTML += `<div class="text-red-500 mb-1">  [x] Network failed: ${escapeHtml(String(err))}</div>`;
+            }
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        async function triggerIngest() {
+            const raptorActive = document.getElementById('raptor-toggle').checked;
+            const consoleEl = document.getElementById('console-output');
+            const ingestBtn = document.getElementById('ingest-btn');
+
+            consoleEl.innerHTML += `<div class="console-text mt-2 mb-1">> Starting ingestion (RAPTOR: ${raptorActive})...</div>`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+
+            ingestBtn.disabled = true;
+            ingestBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> Indexing...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/ingest?raptor=${raptorActive}`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    consoleEl.innerHTML += `<div class="text-emerald-500 mb-1">  [✓] Index refreshed.\n${escapeHtml(data.output)}</div>`;
+                    refreshStatus();
+                } else {
+                    consoleEl.innerHTML += `<div class="text-red-500 mb-1">  [x] Failed: ${escapeHtml(data.detail)}</div>`;
+                }
+            } catch (err) {
+                consoleEl.innerHTML += `<div class="text-red-500 mb-1">  [x] Connection Error: ${escapeHtml(String(err))}</div>`;
+            }
+
+            ingestBtn.disabled = false;
+            ingestBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">rocket_launch</span> Start Ingestion';
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+    </script>
+</body>
+</html>

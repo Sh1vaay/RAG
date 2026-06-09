@@ -3,14 +3,15 @@ import sys
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
+from typing import Any
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriever
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
-from query_processor import RoutingRetriever, QueryAnalyzer, SearchQuery
+from query_processor import RoutingRetriever, QueryAnalyzer, SearchQuery, compute_rrf
 from multi_rep_utils import restore_original_content
 
 def post_filter_documents(docs: list, query: SearchQuery) -> list:
@@ -31,6 +32,30 @@ def post_filter_documents(docs: list, query: SearchQuery) -> list:
             continue
         filtered_docs.append(doc)
     return filtered_docs
+
+class CustomEnsembleRetriever(BaseRetriever):
+    retrievers: list
+    weights: list
+    
+    class Config:
+        arbitrary_types_allowed = True
+
+    def _get_relevant_documents(self, query: str, *, run_manager=None) -> list:
+        retrieved_lists = [r.invoke(query) for r in self.retrievers]
+        return compute_rrf(retrieved_lists)
+
+class CustomCompressionRetriever(BaseRetriever):
+    base_retriever: BaseRetriever
+    base_compressor: Any
+    
+    class Config:
+        arbitrary_types_allowed = True
+
+    def _get_relevant_documents(self, query: str, *, run_manager=None) -> list:
+        docs = self.base_retriever.invoke(query)
+        if not docs:
+            return []
+        return self.base_compressor.compress_documents(docs, query)
 
 # Load environment variables
 load_dotenv()
@@ -62,9 +87,12 @@ def setup_pipeline():
     
     # 3. Setup Keyword (BM25) and Semantic (FAISS) Retrievers
     print("Initializing hybrid retrieval (BM25 + FAISS)...")
-    # Extract all documents currently persisted inside the vector store to seed the BM25 index
-    documents = list(vectorstore.docstore._dict.values())
-    
+    # Extract all documents currently persisted inside the vector store to seed the BM25 index safely
+    if hasattr(vectorstore, "docstore") and hasattr(vectorstore.docstore, "_dict"):
+        documents = list(vectorstore.docstore._dict.values())
+    else:
+        documents = []
+        
     if not documents:
         raise ValueError("No documents loaded from vector store database to build BM25 search index.")
 
@@ -80,7 +108,7 @@ def setup_pipeline():
     basic_retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
     # Combine retrievers using Reciprocal Rank Fusion (RRF)
-    ensemble_retriever = EnsembleRetriever(
+    ensemble_retriever = CustomEnsembleRetriever(
         retrievers=[bm25_retriever, vector_retriever],
         weights=[0.5, 0.5]
     )
@@ -101,7 +129,7 @@ def setup_pipeline():
         compressor = FlashrankRerank(top_n=3)
         print("Initializing local Cross-Encoder reranking (Flashrank)...")
 
-    compression_retriever = ContextualCompressionRetriever(
+    compression_retriever = CustomCompressionRetriever(
         base_compressor=compressor, 
         base_retriever=ensemble_retriever
     )
@@ -151,13 +179,41 @@ def setup_pipeline():
         ("human", "{input}"),
     ])
 
-    # 8. Build the Chains
-    # Build standard QA Chain for the heavy pipeline
-    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+    # 8. Build the Chains (LCEL implementations replacing classic chains)
+    
+    # Standalone query re-writer chain
+    query_rewriter = contextualize_q_prompt | llm | StrOutputParser()
 
-    # Build the Fast Path simple chain using the basic retriever
-    fast_history_retriever = create_history_aware_retriever(llm, basic_retriever, contextualize_q_prompt)
-    fast_rag_chain = create_retrieval_chain(fast_history_retriever, question_answer_chain)
+    # Routing helper to bypass re-writer when history is empty
+    def route_retriever_input(inputs):
+        if inputs.get("chat_history"):
+            return query_rewriter.invoke(inputs)
+        return inputs["input"]
+
+    # History-aware retriever chain (replaces create_history_aware_retriever)
+    fast_history_retriever = (
+        RunnablePassthrough()
+        | route_retriever_input
+        | basic_retriever
+    )
+
+    # Helper function to format docs for prompt injection
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+
+    # Document QA response generator (replaces create_stuff_documents_chain)
+    question_answer_chain = (
+        RunnablePassthrough.assign(context=lambda x: format_docs(x["context"]))
+        | qa_prompt
+        | llm
+        | StrOutputParser()
+    )
+
+    # Complete retrieval chain linking retrieval and QA (replaces create_retrieval_chain)
+    fast_rag_chain = (
+        RunnablePassthrough.assign(context=fast_history_retriever)
+        | RunnablePassthrough.assign(answer=question_answer_chain)
+    )
 
     return {
         "llm": llm,

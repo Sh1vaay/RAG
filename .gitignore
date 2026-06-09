@@ -32,3 +32,8 @@ faiss_db/
 # OS Specific Files
 .DS_Store
 Thumbs.db
+
+# Developer Diagnostics and Test logs
+diagnostic.py
+diagnostic_out.txt
+test_imports.log

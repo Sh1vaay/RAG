@@ -1,8 +1,8 @@
-# 🌌 Advanced Local Conversational RAG System
+# 🌌 Aether AI: Enterprise Corrective & Self-Reflective RAG Engine
 
 <div align="center">
 
-*An enterprise-ready, locally persisted Corrective & Self-Reflective Conversational RAG pipeline built on high-fidelity query optimizations and multi-agent LangGraph workflows.*
+*A production-grade, locally-persisted Corrective & Self-Reflective Conversational RAG pipeline built on high-fidelity query optimizations, dynamic routing, and multi-agent LangGraph workflows.*
 
 &nbsp;
 
@@ -18,281 +18,330 @@
 
 ## 🗺️ Table of Contents
 * [🪐 Project Overview](#-project-overview)
-* [⚡ Key Capabilities](#-key-capabilities)
+* [⚡ Key Features](#-key-features)
 * [🏗️ System Architecture](#️-system-architecture)
-* [🔄 Application Request Flow](#-application-request-flow)
-* [🛠️ Tech Stack](#️-tech-stack)
-* [📂 Project Layout](#-project-layout)
-* [🚀 Getting Started](#-getting-started)
-  * [Configuration (`.env`)](#configuration-env)
-  * [Installation](#installation)
-  * [Usage](#usage)
-* [🔒 Security & Hardening](#-security--hardening)
-* [📈 Performance & Scalability](#-performance--scalability)
+* [🔄 Application Request Lifecycle Flow](#-application-request-lifecycle-flow)
+* [🛠️ Technology Stack](#️-technology-stack)
+* [🔧 Design Decisions](#-design-decisions)
+* [🔌 API Reference Specs](#-api-reference-specs)
+* [📁 Folder Structure](#-folder-structure)
+* [🚀 Developer Experience & Setup](#-developer-experience--setup)
+  * [Environment Configuration](#environment-configuration)
+  * [Installation Steps](#installation-steps)
+  * [CLI Execution](#cli-execution)
+  * [FastAPI Server Execution](#fastapi-server-execution)
+* [🐳 Production Deployment (Docker)](#-production-deployment-docker)
+* [🔒 Security & Hardening Policy](#-security--hardening-policy)
+* [📈 Performance, Scalability & Observability](#-performance-scalability--observability)
+* [🤝 Contributing Guidelines](#-contributing-guidelines)
 * [📄 License](#-license)
 
 ---
 
 ## 🪐 Project Overview
 
-Standard RAG architectures frequently suffer from retrieval noise, model hallucinations, and high latency when processing mixed datasets. 
+Standard Retrieval-Augmented Generation (RAG) systems frequently struggle in production due to three core challenges: **retrieval noise** (injecting irrelevant text), **hallucinations** (unsupported model outputs), and **high latency** (processing simple tasks through heavy pipelines).
 
-This project implements an **Advanced Offline Conversational RAG Pipeline** designed for high recall, precision, and safety. It features:
-* **Upfront Routing**: Instantly separates simple conversational tasks (Fast Path) from heavy multi-hop retrieval paths using an in-memory Semantic Router.
-* **Robust Multi-Query Retrieval**: Executes hybrid dense (FAISS) and sparse (BM25) searches, and combines candidate documents using Reciprocal Rank Fusion (RRF).
-* **Multi-Agent Orchestration**: Uses LangGraph workflows to decompose complex questions into sequential sub-tasks with memory tracking.
-* **Double-Guardrail Self-RAG Loop**: Validates the correctness and usefulness of generated answers using an LLM evaluator to prevent hallucinations.
-* **Corrective RAG (CRAG)**: Dynamically falls back to Google/DuckDuckGo web search if local document indexing lacks relevant facts.
+**Aether AI** resolves these issues by organizing RAG execution into a **Dual-Path processing topology**:
+1. **The Fast Path (Low-Latency Bypass)**: Simple inputs, greetings, or direct conversation bypass heavy vector stores entirely using an in-memory embedding-based **Semantic Router**, routing queries to a lightweight conversational agent in milliseconds.
+2. **The Heavy Path (Self-Reflective Agents)**: Complex queries are routed to specialized pipelines where Pydantic Query Analyzers parse constraints (years, pages, types). Retrieval combines dense (FAISS) and sparse (BM25) search indices via Reciprocal Rank Fusion (RRF), followed by a multi-agent **LangGraph** self-correcting loop. If retrieved documents are irrelevant, the system triggers **Corrective RAG (CRAG)** via DuckDuckGo Web Search. Final answers are validated against hallucinations before reaching the user.
 
 ---
 
-## ⚡ Key Capabilities
+## ⚡ Key Features
 
-* 📂 **Multi-Format Processing**: Routes PDFs (`PyPDFLoader`), CSVs (`CSVLoader`), Word files (`Docx2txtLoader`), and text documents directly from a local `./documents` folder.
-* 🔮 **Configurable Dual-Routing Engine**: Features an in-memory embedding-based **Semantic Router** (zero-token latency) and an **LLM Router** (gpt-4o-mini structured output) to select optimal query translation strategies (HyDE, Step-Back, Decomposition, RAG-Fusion, Multi-Query, or Simple bypass).
-* 🏷️ **Metadata Filtering & Temporal Analysis**: Dynamically extracts constraints like `publish_year`, `file_type`, `page_number`, and `data_source` corpus categories using Pydantic Query Analyzers. Relative time mentions (e.g., "last year") are resolved dynamically against the system clock.
-* 🕸️ **LangGraph Query Decomposition**: Sequentially processes multi-hop questions using a cyclic state-graph workflow, updating sub-answers and search context dynamically.
-* 🤖 **Corrective RAG (CRAG) Fallback**: Integrates LangChain's `DuckDuckGoSearchRun` to augment context with real-time web facts when retrieved local documents are evaluated as irrelevant.
-* 🪞 **Double-Guardrail Evaluator (Self-RAG)**: 
-  1. **Hallucination Grader**: Checks if the generated answer is fully grounded in the retrieved facts.
-  2. **Answer Grader**: Validates if the answer actually addresses the user's original query. If validation fails, the loop triggers a search query rewrite and web search fallback.
-* 📌 **Multi-Representation Indexing**: Summarizes raw chunks into clean one-line summaries at ingestion. The database indexes these summaries for optimal semantic alignment, but retrieval swaps them back to their original chunks to preserve rich context for generation.
-* 🌲 **RAPTOR Tree Summaries** *(opt-in via `--raptor` flag)*: Recursively clusters document chunks and intermediate summaries using Gaussian Mixture Models (GMM) to build a multi-level tree of information (from detailed leaves to high-level root summaries), embedding all levels to answer broad, global queries.
-* 🧠 **Semantic Chunking**: Computes semantic similarity drift between consecutive sentences to keep related concepts grouped together in cohesive chunks.
-* 🔍 **Hybrid Query Matching**: Fuses dense similarity matching (FAISS) with term-frequency index scanning (BM25) to capture both semantic concepts and exact keywords.
-* 🎯 **Configurable Reranking**: Supports local Cross-Encoder scoring via `Flashrank`, or cloud-based `Cohere Rerank` integration, selectable in the environment configuration.
+* 🔮 **Dual-Routing Switchboard**: Supports embedding-based local **Semantic Routing** (zero-token latency, in-memory) and **LLM Routing** (gpt-4o-mini structured schema) to classify query intent.
+* 🔬 **Pydantic Query Analyzer**: Automatically extracts database metadata filters (e.g., `publish_year`, `file_type`, `page_number`) and resolves relative dates (e.g., "last year") to build strict database queries.
+* 🔀 **Hybrid Retrieval (RRF)**: Combines dense vector retrieval (FAISS) and sparse keyword retrieval (BM25) using Reciprocal Rank Fusion to ensure both semantic capture and exact keyword matches.
+* 🕸️ **LangGraph Multi-Hop Decomposition**: Breaks complex, multi-faceted questions into sequential sub-questions, answering them one-by-one using intermediate context memory.
+* 🌐 **Corrective RAG (CRAG)**: Grades retrieved documents and dynamically triggers DuckDuckGo web search to gather missing facts when local context is insufficient.
+* 🪞 **Double-Guardrail Self-RAG Evaluator**: Uses a two-step validation chain (Hallucination Grader + Answer Relevance Grader) to run verification loops and query rewrites until the output is fully grounded.
+* 🌲 **Hierarchical RAPTOR Indexing**: Builds a multi-level tree of document chunks and cluster summaries using Gaussian Mixture Models (GMM) to support high-fidelity global summarization.
+* ✂️ **Semantic Chunking**: Identifies meaning-based boundaries by tracking semantic drift across adjacent sentences, preventing paragraph truncation.
+* 🎯 **Flashrank CPU Reranking**: Re-ranks candidates locally on CPU using optimized quantized cross-encoder models.
 
 ---
 
 ## 🏗️ System Architecture
 
-The following diagram illustrates the components, indices, services, and execution logic of the system:
+The following diagram illustrates Aether AI's multi-layered layout, showing data flows from document ingestion down to response validation:
 
 ```mermaid
-flowchart TB
-    %% Ingestion Section
-    subgraph Ingestion [1. Ingestion Pipeline]
-        Docs[("./documents/ (PDF, CSV, Docx, TXT)")] --> Loaders["Document Loaders (PyPDFLoader, CSVLoader, etc.)"]
-        Loaders --> Chunking["Semantic Chunking (Percentile Drift)"]
-        Chunking --> Splits["Raw Document Splits"]
-        Splits --> MultiRep["Multi-Representation Summary Generation"]
-        Splits -.->|--raptor| GMM["RAPTOR: Gaussian Mixture Model Clustering"]
-        GMM -.-> Tree["Multi-Level Hierarchical Tree Summaries"]
-        MultiRep & Tree --> StoreFAISS[("Local FAISS Vector DB\n(index: text-embedding-3-small)")]
+graph TB
+    subgraph UI ["🖥️ Presentation Layer (Frontend / Client)"]
+        Browser["🌐 Web Browser (HTML5/JS Dashboard)"]
+        CLI["💻 CLI Client (main.py)"]
     end
 
-    %% Routing & Processing Section
-    subgraph Execution [2. Query Execution & Routing]
-        UserQuery([User Input Query]) --> HistoryChecker["Chat History Contextualization"]
-        HistoryChecker --> Router{"Semantic / LLM Router"}
-        
-        Router -->|simple| FastPath["⚡ Fast Path (Simple/Greeting Bypass)"]
-        FastPath --> FastGen["Lightweight Generation Chain"]
-        
-        Router -->|complex| Analyzer["Pydantic Query Analyzer (Metadata Filters)"]
-        Analyzer --> FilterInject["FAISS Vector Store Dynamic Filtering"]
+    subgraph API ["⚡ API & Orchestration Layer (Backend)"]
+        FastAPI["🚀 FastAPI App (app.py)"]
+        Router["🔀 Query Switchboard (query_processor.py)"]
+        LangGraph["🕸️ LangGraph Agents (agentic_graph.py / decomposition_graph.py)"]
     end
 
-    %% LangGraph Agents
-    subgraph HeavyPipeline [3. Deep Retrieval & Self-RAG Agents]
-        FilterInject --> StandardRet["Multi-Query Hybrid Retriever\n(FAISS Dense + BM25 Sparse + RRF)"]
-        
-        FilterInject -->|decomposition route| DecGraph["LangGraph: Sequential Multi-Hop Agent"]
-        DecGraph --> Synthesize["Synthsized Sub-answers"]
-        
-        StandardRet --> GradeDocs{"Document Relevance Grader"}
-        GradeDocs -->|Irrelevant Docs| RewriteQuery["Query Rewriter Node"]
-        RewriteQuery --> DDGWeb["DuckDuckGo Web Search Fallback"]
-        DDGWeb --> GenerateNode["Generate Answer Node"]
-        
-        GradeDocs -->|Relevant Docs| GenerateNode
-        Synthesize --> GenerateNode
-        
-        GenerateNode --> HallucinationGrader{"Hallucination Grader\n(Is grounded?)"}
-        HallucinationGrader -->|No - Hallucinated| RewriteQuery
-        HallucinationGrader -->|Yes - Grounded| AnswerGrader{"Answer Grader\n(Addresses question?)"}
-        AnswerGrader -->|No - Irrelevant| RewriteQuery
-        AnswerGrader -->|Yes - Complete| OutputAnswer([Final Answer + Citations])
-        FastGen --> OutputAnswer
+    subgraph DATA ["💾 Data & Storage Layer"]
+        FAISS["🧲 FAISS Vector DB"]
+        BM25["📄 BM25 Sparse Index"]
+        FS["📁 File System (staged PDFs/DOCX)"]
     end
 
-    classDef database fill:#2980b9,stroke:#fff,stroke-width:1px,color:#fff;
-    classDef process fill:#2ecc71,stroke:#fff,stroke-width:1px,color:#fff;
-    classDef agent fill:#e74c3c,stroke:#fff,stroke-width:1px,color:#fff;
-    classDef router fill:#f1c40f,stroke:#fff,stroke-width:1px,color:#000;
+    subgraph EXT ["🌐 External Services"]
+        OpenAI["🤖 OpenAI API (gpt-4o-mini & embeddings)"]
+        Cohere["☁️ Cohere Rerank API (Optional)"]
+        DDG["🌍 DuckDuckGo (CRAG Web Search)"]
+        LangSmith["📊 LangSmith (Tracing & Observability)"]
+    end
+
+    Browser <-->|HTTP / JSON| FastAPI
+    CLI <-->|Local Python Calls| Router
+    FastAPI --> Router
+    Router -->|Orchestrates| LangGraph
     
-    class StoreFAISS database;
-    class Router,GradeDocs,HallucinationGrader,AnswerGrader router;
-    class DecGraph,GenerateNode,DDGWeb agent;
-    class Chunking,MultiRep,Analyzer process;
+    %% Data retrieval
+    LangGraph -->|Read Vectors| FAISS
+    LangGraph -->|Read Keyword Index| BM25
+    FastAPI -->|Load Documents| FS
+    
+    %% External API calls
+    LangGraph & Router -->|Embeddings / Gen| OpenAI
+    LangGraph -->|Rerank Context| Cohere
+    LangGraph -->|Web Search| DDG
+    FastAPI & LangGraph & Router -->|Telemetry| LangSmith
 ```
 
 ---
 
-## 🔄 Application Request Flow
+## 🔄 Application Request Lifecycle Flow
 
-The diagram below maps the runtime lifecycle of a user query through the system's routing decision trees and Self-RAG loops:
+This sequence flowchart shows how user requests are parsed, routed, retrieved, graded, and validated:
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Client / CLI User
-    participant Main as main.py (Runtime)
-    participant Router as SemanticRouter
-    participant Analyzer as QueryAnalyzer
-    participant Graph as AgenticSelfRAG (LangGraph)
-    participant Web as DuckDuckGo Web Search
-    participant LLM as OpenAI Chat API
-
-    User->>Main: Ask question ("Compare A and B")
-    Main->>Router: Route classification
-    Router-->>Main: Returns Route ("standard" / "decomposition" / "simple")
-
-    alt Route == "simple" (Fast Path)
-        Main->>LLM: Run fast_rag_chain (Skip heavy retrieval)
-        LLM-->>Main: Returns direct conversational answer
-        Main-->>User: Output direct answer (no source citations)
-    else Route == "decomposition" / "standard" (Heavy Path)
-        Main->>Analyzer: Parse metadata filters & core search term
-        Analyzer-->>Main: SearchQuery object (e.g. file_type='pdf')
-        
-        Main->>Graph: Invoke LangGraph Agentic workflow
-        Graph->>Graph: Retrieve local documents (FAISS + BM25)
-        Graph->>Graph: Grade retrieved documents for relevance
-        
-        alt All Documents Irrelevant (CRAG Trigger)
-            Graph->>Web: Query DuckDuckGo web search
-            Web-->>Graph: Return search snippets
-        end
-        
-        Graph->>LLM: Generate candidate answer from context
-        LLM-->>Graph: Candidate answer text
-        
-        loop Double-Guardrail Verification (Max 2 retries)
-            Graph->>LLM: Hallucination Grader: Is answer grounded in context?
-            LLM-->>Graph: Verdict ("grounded" / "hallucination")
-            
-            alt Hallucination Detected
-                Graph->>Graph: Rewrite search query & retrieve again
-            else Answer is Grounded
-                Graph->>LLM: Answer Grader: Does answer address the user query?
-                LLM-->>Graph: Verdict ("yes" / "no")
-                alt Answer does NOT address question
-                    Graph->>Graph: Rewrite search query & retrieve again (or Web search fallback)
-                end
-            end
-        end
-        
-        Graph-->>Main: Return final validated state
-        Main-->>User: Display final answer + Document Citations
-    end
+flowchart TD
+    Start([🧑‍💻 User Query]) --> Contextualize{📜 Has Chat History?}
+    Contextualize -->|Yes| RewriteQ["🤖 GPT-4o-mini\n(Generate Standalone Question)"]
+    Contextualize -->|No| UseOriginal["Use Original Question"]
+    
+    RewriteQ --> RouteStep
+    UseOriginal --> RouteStep
+    
+    RouteStep[🔮 Router Classifies Query] --> RouteDecision{Select Route}
+    
+    %% Fast Path
+    RouteDecision -->|⚡ simple| FastPath[🚀 Fast Path Bypass]
+    FastPath --> FastRetrieve[Basic Retrieve k=3]
+    FastRetrieve --> FastGen[🤖 GPT-4o-mini Q&A]
+    FastGen --> EndResponse
+    
+    %% Heavy Path
+    RouteDecision -->|🧠 complex / multi-hop| Analyzer[🔬 Pydantic Query Analyzer]
+    Analyzer --> ExtractedFilters[🎯 Extracted Metadata Filters]
+    ExtractedFilters --> HybridSearch[🔀 Hybrid Retrieve: FAISS + BM25 + RRF]
+    
+    HybridSearch --> DecisionWorkflow{Route Type?}
+    
+    %% Decomposition
+    DecisionWorkflow -->|decomposition| GraphDec[🕸️ LangGraph Multi-Hop Agent]
+    GraphDec --> SubQ[Decompose Sub-Questions]
+    SubQ --> SequentialAns[Answer Sequentially with Context Memory]
+    SequentialAns --> Synthesis[Synthesize Final Answer]
+    
+    %% Standard / CRAG / Self-RAG
+    DecisionWorkflow -->|standard / fusion / step_back / hyde| GraphCRAG[🕸️ LangGraph Self-Correcting Agent]
+    GraphCRAG --> Grader[⚖️ Grade Retrieved Documents]
+    Grader -->|❌ Irrelevant| Rewriter[✏️ Query Rewriter]
+    Rewriter --> WebSearch[🌐 DuckDuckGo Web Search]
+    WebSearch --> GenResponse
+    
+    Grader -->|✅ Relevant| GenResponse[💡 Generate Grounded Response]
+    
+    GenResponse --> SelfReflect{🪞 Hallucination Grader}
+    SelfReflect -->|⚠️ Hallucinated| Rewriter
+    SelfReflect -->|✅ Grounded| AnswerRelevance{✅ Answer Grader}
+    AnswerRelevance -->|❌ Off-Topic| Rewriter
+    AnswerRelevance -->|✅ Addresses Q| Synthesis
+    
+    Synthesis --> EndResponse([🎯 Final Response + Citations])
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Technology Stack
 
-* **Package Manager**: [uv](https://github.com/astral-sh/uv) (Rust-powered, ultra-fast Python environment sync)
-* **Orchestration**: [LangChain](https://github.com/langchain-ai/langchain) & [LangGraph](https://github.com/langchain-ai/langgraph)
-* **LLM Engine**: OpenAI API (`gpt-4o-mini` & `text-embedding-3-small`)
-* **Vector Store**: [FAISS](https://github.com/facebookresearch/faiss) (Lightweight, local, network-vulnerability-free vector library)
-* **Sparse Index**: [Rank-BM25](https://github.com/dorianbrown/rank_bm25)
-* **Re-ranker Model**: [Flashrank](https://github.com/prithivida/flashrank) (Quantized cross-encoder model running locally via ONNX)
-* **Document Parsing**: `pypdf`, `docx2txt`, `beautifulsoup4`, `tiktoken`
+* **Core Language & Tooling**: Python 3.12+ managed by [uv](https://github.com/astral-sh/uv) (Rust-powered virtual environment manager).
+* **Agentic Framework**: [LangGraph v0.2](https://github.com/langchain-ai/langgraph) & [LangChain v1.0 / langchain-core](https://github.com/langchain-ai/langchain).
+* **Vector Store**: [FAISS (Facebook AI Similarity Search)](https://github.com/facebookresearch/faiss) CPU-optimized local database.
+* **Sparse Search Engine**: [Rank-BM25](https://github.com/dorianbrown/rank_bm25).
+* **Reranker Model**: [Flashrank](https://github.com/prithivida/flashrank) running local quantized cross-encoders via ONNX Runtime.
+* **API Framework**: [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/) ASGI server.
+* **Frontend**: Vanilla HTML5/JS single-page dashboard styled with Tailwind CSS (Glassmorphism theme).
+* **Document Parsing**: `pypdf`, `docx2txt`, `beautifulsoup4`, `csv`.
 
 ---
 
-## 📂 Project Layout
+## 🔧 Design Decisions
+
+1. **Local Vector Storage (FAISS)**: Using local FAISS database directory indexes keeps operational costs low, eliminates cloud dependencies, and ensures data remains stored locally.
+2. **Dense-Sparse Hybrid Retrieval**: Dense embeddings model high-level concepts but fail on precise identifiers like codes, years, or numbers. Combining FAISS with BM25 via Reciprocal Rank Fusion (RRF) preserves both search qualities.
+3. **Decoupled Evaluators**: Evaluation agents in LangGraph are configured as isolated nodes with temperature=0 to prevent stochastic variance during verification.
+4. **Asynchronous Execution**: Ingestion operations run in separate system-level processes using `asyncio` to prevent blocking the main server thread.
+
+---
+
+## 🔌 API Reference Specs
+
+### Endpoints Overview
+
+| Method | Endpoint | Description | Request Payload | Response Schema |
+| :--- | :--- | :--- | :--- | :--- |
+| **GET** | `/` | Serves the main UI Dashboard page | None | `text/html` |
+| **GET** | `/api/status` | Returns DB metrics, config, and staged files | None | JSON status object |
+| **POST** | `/api/config` | Updates routing and reranker configurations | `ConfigUpdateRequest` | Success message |
+| **POST** | `/api/chat` | Evaluates query and executes RAG pipeline | `ChatRequest` | `ChatResponse` |
+| **POST** | `/api/upload` | Uploads raw documents safely to `./documents/` | Multipart Files | List of saved filenames |
+| **POST** | `/api/ingest` | Parses staged files and builds vector DB | Query: `raptor` (bool) | Ingestion log snippet |
+
+---
+
+## 📂 Folder Structure
 
 ```plaintext
 rag_project/
-├── .env.example            # Reference configurations (Template)
-├── .gitignore              # Git ignore rules for virtual environments, .env and db
-├── pyproject.toml          # Modern PEP 621 project configuration managed by uv
-├── requirements.txt        # Exported dependency lockfile
+├── .github/workflows/
+│   └── ci.yml              # CI workflow checking syntax, lint, & Ruff formatting
+├── documents/              # Staging area for raw source documents (PDF, CSV, MD, etc.)
+├── faiss_db/               # Locally-persisted FAISS vector index files
+├── .dockerignore           # Excludes local caches, database files, and secrets from builds
+├── .env.example            # Configuration settings template
+├── .gitignore              # Ignores local databases, virtual envs, and API credentials
+├── Dockerfile              # Secure multi-stage production Dockerfile
+├── pyproject.toml          # Project dependencies, linter settings, and metadata (uv-managed)
+├── requirements.txt        # Package locking file for pinning versions
 │
-├── ingest.py               # Scraping, semantic parsing, Multi-Rep + RAPTOR building
-├── query_processor.py      # Dynamic semantic embedding router & Pydantic analyzer
+├── app.py                  # FastAPI server and application endpoints
+├── main.py                 # Core setup logic and CLI execution loop
+├── ingest.py               # Ingest pipeline (semantic splitting, GMM/RAPTOR index creation)
+├── query_processor.py      # Embedding classifier and Pydantic SearchQuery analyzer
+├── agentic_graph.py        # LangGraph CRAG and Self-RAG state-graph
 ├── decomposition_graph.py  # LangGraph multi-hop sequential decomposition agent
-├── agentic_graph.py        # LangGraph CRAG + Self-RAG Double-Guardrail agent
 ├── multi_rep_utils.py      # Multi-Representation Indexing utilities
-├── main.py                 # CLI interface, pipeline runner, and conversational loop
-└── playground.py           # Local helper script for testing embeddings & similarities
+└── playground.py           # Diagnostic script for quick token and cosine checks
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Developer Experience & Setup
 
-### Installation
+### Environment Configuration
 
-1. **Clone the repository:**
+1. Copy the configuration template:
    ```bash
-   git clone https://github.com/Sh1vaay/RAG.git
-   cd RAG
+   cp .env.example .env
+   ```
+2. Open `.env` and fill in your keys:
+   ```ini
+   OPENAI_API_KEY=sk-proj-YOUR_API_KEY_HERE
+   
+   # Optional LangSmith tracing config
+   LANGCHAIN_TRACING_V2=true
+   LANGCHAIN_API_KEY=lsv2_pt_...
+   LANGCHAIN_PROJECT="rag-telemetry-dashboard"
    ```
 
-2. **Synchronize dependencies:**
-   `uv` automatically configures your virtual environment and locks dependencies:
+### Installation Steps
+
+1. **Install uv** (Rust-powered package manager):
+   ```bash
+   # macOS/Linux
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+2. **Install project dependencies**:
    ```bash
    uv sync
    ```
 
-### Configuration (`.env`)
+### Ingesting Documents
 
-Copy the example configuration file:
+Place your files in `./documents/`, then run the parser:
 ```bash
-cp .env.example .env
-```
-Open `.env` and configure your settings:
-```ini
-OPENAI_API_KEY=sk-proj-YOUR_API_KEY
+# Standard Ingestion & Semantic Chunking
+uv run ingest.py
 
-# Routing configuration: 'semantic' (Fast/Free similarity matching) or 'llm' (Structured reasoning)
-ROUTING_METHOD=semantic
-
-# Reranker selection: 'flashrank' (local ONNX Cross-Encoder) or 'cohere' (Cloud Rerank API)
-RERANKER_PROVIDER=flashrank
+# Advanced Ingestion (RAPTOR clustering tree enabled)
+uv run ingest.py --raptor
 ```
 
-### Usage
+### CLI Execution
 
-1. **Populate Documents**: Place your PDFs, Word documents (`.docx`), CSVs, or text files into the `./documents` folder.
-2. **Ingest Data**: Execute the parser and chunking pipeline to build the database:
-   ```bash
-   # Build index using Multi-Rep indexing
-   uv run ingest.py
+To run queries directly in your terminal:
+```bash
+uv run main.py
+```
 
-   # Build index using Multi-Rep + RAPTOR hierarchical tree summaries
-   uv run ingest.py --raptor
-   ```
-3. **Launch the Chat CLI**: Run the interactive conversational loop:
+### FastAPI Server Execution
+
+To run the FastAPI server locally:
+```bash
+uv run app.py
+```
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser to access the dashboard.
+
+---
+
+## 🐳 Production Deployment (Docker)
+
+This project uses a secure multi-stage Docker build to build lightweight runtime containers.
+
+1. **Build the Container Image**:
    ```bash
-   uv run main.py
+   docker build -t aether-rag-service .
    ```
-4. **Launch the API Server**: Start the FastAPI backend for frontend integration:
+2. **Launch the Container**:
+   Pass your keys and mount local folders to persist the database files:
    ```bash
-   uv run app.py
+   docker run -d \
+     -p 8000:8000 \
+     -e OPENAI_API_KEY="sk-proj-YOUR_KEY" \
+     -v $(pwd)/documents:/app/documents \
+     -v $(pwd)/faiss_db:/app/faiss_db \
+     aether-rag-service
    ```
 
 ---
 
-## 🔒 Security & Hardening
+## 🔒 Security & Hardening Policy
 
-* **Local Sandbox Boundary**: The SQLite FAISS database, semantic indices, and re-ranking tasks are kept local. Document content is only sent to OpenAI for LLM inference (not for embeddings or database hosting).
-* **Vulnerable Dependency Avoidance**: The project dependencies contain no external pickling/caching libraries (`diskcache`) or multi-modal faithfulness evaluation modules (`ragas`), completely eliminating vulnerabilities such as CVE-2025-69872 and CVE-2025-45691.
-* **Secrets Management**: Built-in rules in `.gitignore` ensure your `.env` configuration file and local `faiss_db/` folder are never committed to version control.
+* **Dependencies Hardening**: Vulnerable packages prone to arbitrary code execution during deserialization or pickling have been removed from the dependency tree.
+* **Dynamic Config Verification**: Dynamic configs via `/api/config` are validated against schemas before being applied, protecting the backend from runtime injection.
+* **Safe Subprocesses**: Subprocess execution in `/api/ingest` uses explicit arguments list parsing instead of shell integration (`shell=False`), preventing command injections.
+* **Data Path Traversal Protections (CWE-22 / CWE-23)**: In `/api/upload`, uploaded filenames are stripped of path components like `../` and null bytes (`\0`) to keep files contained inside `./documents/`.
+* **Safe Error Logging**: FastAPI endpoints are configured to catch internal exceptions, logging full tracebacks to `sys.stderr` while returning clean, generic messages to the browser.
+* **Non-Root Execution (Principle of Least Privilege)**: The production Docker container creates a user `appuser` (UID 10001) and runs the FastAPI server under this user.
 
 ---
 
-## 📈 Performance & Scalability
+## 📈 Performance, Scalability & Observability
 
-* **Parallel Execution**: Retrieval queries for RAG-fusion, Multi-Query, and step-back abstractions are resolved concurrently in a `ThreadPoolExecutor` to optimize API latency.
-* **In-Memory Semantic Routing**: Simple queries bypass the heavy RAG pipelines entirely, resolving in <15ms without LLM latency or token overhead.
-* **Quantized Reranking**: By default, `Flashrank` utilizes local quantized ONNX weights, allowing Cross-Encoder scoring to run inside CPU constraints with negligible RAM overhead.
+* **Parallel Searches**: Multi-query expansions are run concurrently using `ThreadPoolExecutor` to minimize LLM overhead.
+* **Quantized Reranking**: Context reranking is executed on CPU inside local ONNX runtimes using Flashrank, bypassing network calls to external reranking APIs.
+* **Memory Management**: Vector index and database lookups are loaded on demand and cached inside memory.
+* **LangSmith Tracing**: Full runtime tracing is configured. Turning on `LANGCHAIN_TRACING_V2` in `.env` automatically captures step execution latencies, input/output logs, and costs.
+
+---
+
+## 🤝 Contributing Guidelines
+
+1. **Formatting**: Format all edits using Ruff before staging:
+   ```bash
+   uv run ruff format .
+   ```
+2. **Syntax Validation**: Ensure that the project compiles cleanly:
+   ```bash
+   uv run python -m compileall .
+   ```
+3. **Open a PR**: Send pull requests to the `main` branch with descriptive change logs.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+Distributed under the MIT License. See [LICENSE](LICENSE) for more details.

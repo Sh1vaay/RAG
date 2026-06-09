@@ -1,7 +1,9 @@
 import os
 import sys
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from langchain_core.messages import HumanMessage, AIMessage
@@ -10,24 +12,39 @@ from langchain_core.messages import HumanMessage, AIMessage
 from main import setup_pipeline, post_filter_documents
 from multi_rep_utils import restore_original_content
 
+# Global pipeline state container
+pipeline = None
+
+# Modern Lifespan Manager replacing deprecated startup event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global pipeline
+    try:
+        pipeline = setup_pipeline()
+        print("💡 [API] RAG Pipeline loaded successfully.")
+    except Exception as e:
+        print(f"❌ [API] Failed to initialize RAG Pipeline: {e}", file=sys.stderr)
+    yield
+
 # Initialize FastAPI application
 app = FastAPI(
     title="Conversational RAG API",
     description="Backend API serving the Advanced Local Conversational RAG pipeline",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
-# Enable CORS for frontend integration
+# Enable CORS for frontend integration (CORS origins configurable via env)
+allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "*")
+allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Adjust in production
+    allow_origins=allowed_origins if allowed_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Global pipeline state container
-pipeline = None
 
 class ChatMessage(BaseModel):
     role: str # "user" or "assistant"
@@ -48,15 +65,30 @@ class ChatResponse(BaseModel):
     route: str
     sources: List[SourceDocument]
 
-@app.on_event("startup")
-def startup_event():
-    global pipeline
+class ConfigUpdateRequest(BaseModel):
+    routing_method: str
+    reranker_provider: str
+    openai_key: Optional[str] = None
+    cohere_key: Optional[str] = None
+
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    """Serves the main single-page dashboard HTML application."""
     try:
-        pipeline = setup_pipeline()
-        print("💡 [API] RAG Pipeline loaded successfully.")
-    except Exception as e:
-        print(f"❌ [API] Failed to initialize RAG Pipeline: {e}", file=sys.stderr)
-        # We don't raise here to allow server startup and let /status show the error
+        with open("index.html", "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return """
+        <html>
+            <head><title>Aether AI - Loading</title></head>
+            <body style="background:#0f172a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
+                <div>
+                    <h2>Aether AI Dashboard</h2>
+                    <p>Frontend file <code>index.html</code> not found. Please create it in the workspace root.</p>
+                </div>
+            </body>
+        </html>
+        """
 
 @app.get("/api/status")
 def get_status():
@@ -71,6 +103,18 @@ def get_status():
         except Exception:
             pass
 
+    # Scan documents folder for staged files list
+    staged_files = []
+    if os.path.exists("./documents"):
+        for f in os.listdir("./documents"):
+            if os.path.isfile(os.path.join("./documents", f)):
+                size = os.path.getsize(os.path.join("./documents", f))
+                staged_files.append({
+                    "name": f,
+                    "size": f"{size / (1024*1024):.2f} MB" if size > 1024*1024 else f"{size / 1024:.1f} KB",
+                    "status": "ready"
+                })
+
     return {
         "status": "ready" if pipeline else "error",
         "database_loaded": db_exists,
@@ -78,8 +122,33 @@ def get_status():
         "routing_method": os.getenv("ROUTING_METHOD", "semantic"),
         "reranker_provider": os.getenv("RERANKER_PROVIDER", "flashrank"),
         "openai_api_key_configured": bool(os.getenv("OPENAI_API_KEY")),
-        "langsmith_tracing": os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
+        "langsmith_tracing": os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true",
+        "staged_files": staged_files
     }
+
+@app.post("/api/config")
+def update_config(config: ConfigUpdateRequest):
+    """Dynamically updates environment configurations and reloads the pipeline if necessary."""
+    global pipeline
+    # Validate input settings to prevent dynamic configuration pollution
+    if config.routing_method not in ("semantic", "llm"):
+        raise HTTPException(status_code=400, detail="Invalid routing_method. Must be 'semantic' or 'llm'.")
+    if config.reranker_provider not in ("flashrank", "cohere"):
+        raise HTTPException(status_code=400, detail="Invalid reranker_provider. Must be 'flashrank' or 'cohere'.")
+        
+    os.environ["ROUTING_METHOD"] = config.routing_method
+    os.environ["RERANKER_PROVIDER"] = config.reranker_provider
+    if config.openai_key and config.openai_key.strip():
+        os.environ["OPENAI_API_KEY"] = config.openai_key
+    if config.cohere_key and config.cohere_key.strip():
+        os.environ["COHERE_API_KEY"] = config.cohere_key
+    
+    # Reload components to pick up new routing/reranking parameters
+    try:
+        pipeline = setup_pipeline()
+        return {"status": "success", "message": "Configuration updated and pipeline re-initialized."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Pipeline reload failed. Check server configuration logs.")
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
@@ -193,7 +262,7 @@ async def chat_endpoint(request: ChatRequest):
             source_url = doc.metadata.get("source", "Unknown Source")
             title = doc.metadata.get("title", os.path.basename(source_url))
             page = doc.metadata.get("page")
-            snippet = doc.page_content[:200].strip()
+            snippet = doc.page_content[:250].strip()
             
             key = (title, page, snippet[:50])
             if key not in seen_keys:
@@ -212,32 +281,57 @@ async def chat_endpoint(request: ChatRequest):
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[API ERROR] Chat execution failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail="An internal server error occurred while processing your chat request. Please check server logs."
+        )
 
 @app.post("/api/upload")
 async def upload_documents(files: List[UploadFile] = File(...)):
-    """Upload new files into the local documents directory."""
+    """Upload new files into the local documents directory with path traversal sanitization."""
     os.makedirs("./documents", exist_ok=True)
     saved_files = []
     for file in files:
-        file_path = os.path.join("./documents", file.filename)
+        # Sanitise file name to prevent path traversal (CWE-22 / CWE-23)
+        safe_filename = os.path.basename(file.filename)
+        safe_filename = safe_filename.replace("\0", "").replace("/", "").replace("\\", "")
+        
+        # Ensure name is not empty after sanitization
+        if not safe_filename:
+            continue
+            
+        file_path = os.path.join("./documents", safe_filename)
         with open(file_path, "wb") as buffer:
             buffer.write(await file.read())
-        saved_files.append(file.filename)
+        saved_files.append(safe_filename)
         
     return {"status": "success", "uploaded_files": saved_files}
 
 @app.post("/api/ingest")
 async def trigger_ingestion(raptor: bool = False):
-    """Triggers the document ingestion and indexing pipeline."""
+    """Triggers the document ingestion and indexing pipeline asynchronously."""
     try:
-        import subprocess
+        import asyncio
         cmd = [sys.executable, "ingest.py"]
         if raptor:
             cmd.append("--raptor")
             
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        # Run subprocess asynchronously
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
         
+        if proc.returncode != 0:
+            err_msg = stderr.decode().strip()
+            print(f"[API ERROR] Ingestion subprocess failed: {err_msg}", file=sys.stderr)
+            raise RuntimeError(f"Ingestion process exited with code {proc.returncode}")
+            
         # Reload pipeline after successful ingestion
         global pipeline
         pipeline = setup_pipeline()
@@ -245,10 +339,16 @@ async def trigger_ingestion(raptor: bool = False):
         return {
             "status": "success", 
             "message": "Ingestion completed and DB index reloaded.",
-            "output": result.stdout[:500]
+            "output": stdout.decode()[:1000]
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+        print(f"[API ERROR] Ingestion failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail="An internal server error occurred during document ingestion. Please check server logs."
+        )
 
 if __name__ == "__main__":
     import uvicorn
