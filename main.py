@@ -46,7 +46,12 @@ def setup_pipeline():
     if not os.path.exists(db_path) or not os.listdir(db_path):
         raise FileNotFoundError(f"FAISS database directory '{db_path}' is empty or does not exist.")
 
-    # 2. Load the existing FAISS database from disk
+    # 2. Check and announce LangSmith integration
+    if os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true":
+        project = os.getenv("LANGCHAIN_PROJECT", "rag-local-assistant")
+        print(f"📊 [LangSmith] Tracing enabled for project: '{project}'")
+
+    # 3. Load the existing FAISS database from disk
     print("Loading database...")
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     vectorstore = FAISS.load_local(

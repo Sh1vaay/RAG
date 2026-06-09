@@ -17,3 +17,4 @@ langgraph
 scikit-learn
 langchain-cohere
 duckduckgo-search
+langsmith
