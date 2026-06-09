@@ -89,6 +89,51 @@ def ingest_data():
         print("[ERROR] No documents loaded. Exiting.", file=sys.stderr)
         sys.exit(1)
 
+    # Enrich document metadata with structured fields before splitting
+    import re
+    print("Enriching document metadata with file_type, year, page, and row info...")
+    for doc in docs:
+        source = doc.metadata.get("source", "")
+        # 1. Determine file_type
+        if source.startswith("http"):
+            doc.metadata["file_type"] = "web"
+        else:
+            ext = os.path.splitext(source)[-1].lower()
+            if ext == ".pdf":
+                doc.metadata["file_type"] = "pdf"
+            elif ext == ".csv":
+                doc.metadata["file_type"] = "csv"
+            elif ext == ".docx":
+                doc.metadata["file_type"] = "docx"
+            elif ext == ".txt" or ext == ".md":
+                doc.metadata["file_type"] = "txt"
+            else:
+                doc.metadata["file_type"] = "unknown"
+
+        # 2. Extract publication or creation year
+        year_match = re.search(r'\b(19\d\d|20\d\d)\b', source)
+        if year_match:
+            doc.metadata["year"] = int(year_match.group(1))
+        else:
+            doc.metadata["year"] = 0
+            
+        # 3. Ensure page/row standard types (convert page to 1-indexed)
+        if "page" in doc.metadata:
+            try:
+                doc.metadata["page"] = int(doc.metadata["page"]) + 1
+            except Exception:
+                pass
+        else:
+            doc.metadata["page"] = 0
+
+        if "row" in doc.metadata:
+            try:
+                doc.metadata["row"] = int(doc.metadata["row"])
+            except Exception:
+                pass
+        else:
+            doc.metadata["row"] = 0
+
     print(f"Splitting documents (Loaded {len(docs)} pages/documents) using Semantic Chunker...")
     try:
         # Explicitly set the embedding model to ensure stability and calculate similarity thresholds

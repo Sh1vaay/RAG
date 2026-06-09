@@ -10,7 +10,23 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
-from query_processor import RoutingRetriever
+from query_processor import RoutingRetriever, QueryAnalyzer, SearchQuery
+
+def post_filter_documents(docs: list, query: SearchQuery) -> list:
+    """Bulletproof post-filtering layer to ensure all retrieved documents strictly match constraints."""
+    filtered_docs = []
+    for doc in docs:
+        # Check file_type
+        if query.file_type and doc.metadata.get("file_type") != query.file_type:
+            continue
+        # Check year
+        if query.publish_year and doc.metadata.get("year") != query.publish_year:
+            continue
+        # Check page number
+        if query.page_number and doc.metadata.get("page") != query.page_number:
+            continue
+        filtered_docs.append(doc)
+    return filtered_docs
 
 # Load environment variables
 load_dotenv()
@@ -88,6 +104,7 @@ def main():
 
     # 5. Setup LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    query_analyzer = QueryAnalyzer(llm)
 
     # 6. Setup Routing Retriever (Dynamic Translation Router)
     print("Initializing Dynamic Query Translation Router...")
@@ -183,17 +200,34 @@ def main():
                 else:
                     standalone_q = query
                 
-                # 2. Determine Route
-                route, _ = routing_retriever.determine_route(standalone_q)
+                # 2. Extract query filters/constraints
+                structured_query = query_analyzer.analyze(standalone_q)
                 
-                # 3. Execute Route
+                # Build Chroma database filter dictionary
+                chroma_filters = {}
+                if structured_query.file_type:
+                    chroma_filters["file_type"] = structured_query.file_type
+                if structured_query.publish_year:
+                    chroma_filters["year"] = structured_query.publish_year
+                if structured_query.page_number:
+                    chroma_filters["page"] = structured_query.page_number
+                
+                # Dynamically inject filter to the Chroma retriever
+                vector_retriever.search_kwargs["filter"] = chroma_filters if chroma_filters else None
+                if chroma_filters:
+                    print(f"🎯 [Query Analyzer] Extracted constraints: {chroma_filters}")
+                
+                # 3. Determine Route
+                route, _ = routing_retriever.determine_route(structured_query.content_search)
+                
+                # 4. Execute Route
                 if route == "decomposition":
                     from decomposition_graph import create_decomposition_graph
                     # Build and execute the cyclic LangGraph decomposition agent
                     graph = create_decomposition_graph(compression_retriever, llm)
                     
                     state = graph.invoke({
-                        "main_question": standalone_q,
+                        "main_question": structured_query.content_search,
                         "sub_questions": [],
                         "current_index": 0,
                         "sub_answers": [],
@@ -205,12 +239,15 @@ def main():
                     context_docs = state["retrieved_docs"]
                 else:
                     # Retrieve documents using chosen translation strategy
-                    context_docs = routing_retriever.retrieve_for_route(standalone_q, route)
+                    context_docs = routing_retriever.retrieve_for_route(structured_query.content_search, route)
+                    
+                    # Apply final post-filtering layer to ensure perfect matches (especially for BM25)
+                    context_docs = post_filter_documents(context_docs, structured_query)
                     
                     # Generate final answer using context
                     answer = question_answer_chain.invoke({
                         "context": context_docs,
-                        "input": standalone_q,
+                        "input": structured_query.content_search,
                         "chat_history": chat_history
                     })
                 

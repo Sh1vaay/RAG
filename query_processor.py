@@ -362,3 +362,52 @@ class RoutingRetriever(BaseRetriever):
     ) -> List[Document]:
         route, _ = self.determine_route(query)
         return self.retrieve_for_route(query, route)
+
+
+# 7. Query Analyzer & Schema for Metadata Filtering
+class SearchQuery(BaseModel):
+    """Structured query analysis output holding core search term and optional filters."""
+    content_search: str = Field(
+        ..., 
+        description="The core semantic query for similarity search."
+    )
+    file_type: Optional[str] = Field(
+        None, 
+        description="Filter by file type. Must be one of: 'pdf', 'csv', 'docx', 'txt', 'web'."
+    )
+    publish_year: Optional[int] = Field(
+        None,
+        description="Specific year the document was published/created (four digits, e.g. 2023)."
+    )
+    page_number: Optional[int] = Field(
+        None,
+        description="Specific 1-indexed page number to extract (only for PDFs)."
+    )
+
+class QueryAnalyzer:
+    """Invokes structured output parsing to separate semantic search terms from hard metadata constraints."""
+    def __init__(self, llm: ChatOpenAI):
+        self.llm = llm
+        self.structured_llm = self.llm.with_structured_output(SearchQuery)
+
+    def analyze(self, question: str) -> SearchQuery:
+        system_prompt = (
+            "You are an expert query analyzer. Your task is to split a user's natural language question "
+            "into a core semantic search query (content_search) and explicit metadata filters.\n\n"
+            "Metadata Schema:\n"
+            "- file_type: 'pdf', 'csv', 'docx', 'txt', 'web'\n"
+            "- publish_year: four digit year (e.g. 2023)\n"
+            "- page_number: page number to fetch (only if user explicitly says page 2, page 5, etc.)\n\n"
+            "Be precise. If any constraint is not explicitly mentioned, return null for that field."
+        )
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", "{question}")
+        ])
+        chain = prompt | self.structured_llm
+        try:
+            return chain.invoke({"question": question})
+        except Exception as e:
+            print(f"[WARNING] Query analyzer failed: {e}. Falling back to default search.", file=sys.stderr)
+            return SearchQuery(content_search=question)
+
