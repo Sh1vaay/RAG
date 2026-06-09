@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime
 from typing import List, Dict, Any, Tuple, Optional, Literal
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
@@ -395,9 +396,12 @@ class QueryAnalyzer:
         self.structured_llm = self.llm.with_structured_output(SearchQuery)
 
     def analyze(self, question: str) -> SearchQuery:
+        current_date_str = datetime.now().strftime("%Y-%m-%d")
         system_prompt = (
             "You are an expert query analyzer. Your task is to split a user's natural language question "
             "into a core semantic search query (content_search) and explicit metadata filters.\n\n"
+            f"The current date is {current_date_str}.\n"
+            "Use this date to resolve relative dates mentioned in the question (like 'within the last year', 'published in the last 6 months', 'this year') into a specific year value.\n\n"
             "Metadata Schema:\n"
             "- file_type: 'pdf', 'csv', 'docx', 'txt', 'web'\n"
             "- publish_year: four digit year (e.g. 2023)\n"

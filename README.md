@@ -52,7 +52,7 @@ This project addresses these challenges by implementing an **offline, high-recal
 
 * 📂 **Multi-Format Processing**: Routes PDFs (`PyPDFLoader`), CSVs (`CSVLoader`), Word files (`Docx2txtLoader`), and text documents directly from a local `./documents` folder.
 * 🔮 **Configurable Dual-Routing Engine**: Supports both a millisecond-level embedding-based **Semantic Router** (zero LLM token cost) and a structured **LLM Router** (with reasoning tags), dynamically directing questions to the optimal translation technique (HyDE, Step-Back, Decomposition, RAG-Fusion, Multi-Query, or Standard retrieval).
-* 🏷️ **Metadata Filtering & Query Analysis**: Extracts hard filters (e.g. `publish_year`, `file_type`, `page_number`, and `data_source` corpus categories) using a structured Pydantic Query Analyzer, matching them against automatically enriched metadata during ingestion.
+* 🏷️ **Metadata Filtering & Query Analysis**: Extracts hard filters (e.g. `publish_year`, `file_type`, `page_number`, and `data_source` corpus categories) using a structured Pydantic Query Analyzer, matching them against automatically enriched metadata. Resolves relative temporal expressions (e.g. "last year") dynamically by injecting the system clock.
 * 🕸️ **Stateful LangGraph Agent**: Uses a cyclic state-graph workflow for multi-step or comparative query decomposition, handling sub-tasks sequentially with contextual memory tracking.
 * 🧠 **Semantic Chunking**: Instead of static character-limit splits, the pipeline calculates similarity drift between consecutive sentences to keep related concepts together.
 * 🔍 **Hybrid Query Matching**: Fuses vector similarity (dense search) with term-frequency index scanning (BM25 sparse search) to capture both concepts and exact keywords.
