@@ -1,12 +1,14 @@
+from contextlib import asynccontextmanager
 import os
 import sys
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from typing import List, Optional
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
-from typing import List, Dict, Optional
-from langchain_core.messages import HumanMessage, AIMessage
+
 
 # Import pipeline components from main.py
 from main import setup_pipeline, post_filter_documents
@@ -78,24 +80,25 @@ def read_root():
         with open("index.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return """
-        <html>
-            <head><title>Aether AI - Loading</title></head>
-            <body style="background:#0f172a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
-                <div>
-                    <h2>Aether AI Dashboard</h2>
-                    <p>Frontend file <code>index.html</code> not found. Please create it in the workspace root.</p>
-                </div>
-            </body>
-        </html>
-        """
+        return (
+            "<html>"
+            "<head><title>Aether AI - Loading</title></head>"
+            "<body style=\"background:#0f172a;color:#fff;font-family:sans-serif;"
+            "display:flex;align-items:center;justify-content:center;height:100vh;\">"
+            "<div>"
+            "<h2>Aether AI Dashboard</h2>"
+            "<p>Frontend file <code>index.html</code> not found. "
+            "Please create it in the workspace root.</p>"
+            "</div>"
+            "</body>"
+            "</html>"
+        )
 
 @app.get("/api/status")
 def get_status():
     """Returns database status, active configuration, and loader metrics."""
     db_path = "./faiss_db"
     db_exists = os.path.exists(db_path) and len(os.listdir(db_path)) > 0
-    
     doc_count = 0
     if db_exists and pipeline:
         try:
@@ -109,9 +112,12 @@ def get_status():
         for f in os.listdir("./documents"):
             if os.path.isfile(os.path.join("./documents", f)):
                 size = os.path.getsize(os.path.join("./documents", f))
+                mbytes = size / (1024 * 1024)
+                kbytes = size / 1024
+                size_str = f"{mbytes:.2f} MB" if size > 1024 * 1024 else f"{kbytes:.1f} KB"
                 staged_files.append({
                     "name": f,
-                    "size": f"{size / (1024*1024):.2f} MB" if size > 1024*1024 else f"{size / 1024:.1f} KB",
+                    "size": size_str,
                     "status": "ready"
                 })
 
@@ -132,33 +138,45 @@ def update_config(config: ConfigUpdateRequest):
     global pipeline
     # Validate input settings to prevent dynamic configuration pollution
     if config.routing_method not in ("semantic", "llm"):
-        raise HTTPException(status_code=400, detail="Invalid routing_method. Must be 'semantic' or 'llm'.")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid routing_method. Must be 'semantic' or 'llm'."
+        )
     if config.reranker_provider not in ("flashrank", "cohere"):
-        raise HTTPException(status_code=400, detail="Invalid reranker_provider. Must be 'flashrank' or 'cohere'.")
-        
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid reranker_provider. Must be 'flashrank' or 'cohere'."
+        )
+
     os.environ["ROUTING_METHOD"] = config.routing_method
     os.environ["RERANKER_PROVIDER"] = config.reranker_provider
     if config.openai_key and config.openai_key.strip():
         os.environ["OPENAI_API_KEY"] = config.openai_key
     if config.cohere_key and config.cohere_key.strip():
         os.environ["COHERE_API_KEY"] = config.cohere_key
-    
+
     # Reload components to pick up new routing/reranking parameters
     try:
         pipeline = setup_pipeline()
-        return {"status": "success", "message": "Configuration updated and pipeline re-initialized."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Pipeline reload failed. Check server configuration logs.")
+        return {
+            "status": "success",
+            "message": "Configuration updated and pipeline re-initialized."
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Pipeline reload failed. Check server configuration logs."
+        )
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
     global pipeline
     if not pipeline:
         raise HTTPException(status_code=503, detail="RAG Pipeline is not initialized.")
-        
+
     try:
         query = request.message.strip()
-        
+
         # 1. Convert JSON chat history to LangChain messages
         chat_history = []
         for msg in request.history:
@@ -166,7 +184,7 @@ async def chat_endpoint(request: ChatRequest):
                 chat_history.append(HumanMessage(content=msg.content))
             elif msg.role == "assistant":
                 chat_history.append(AIMessage(content=msg.content))
-                
+
         # 2. Contextualize query if history exists
         llm = pipeline["llm"]
         if chat_history:

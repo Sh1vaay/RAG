@@ -15,12 +15,13 @@ Graph flow:
 """
 
 import sys
-from typing import TypedDict, List, Annotated
+from typing import List, TypedDict
+
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.retrievers import BaseRetriever
 from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
 
 # ── State ─────────────────────────────────────────────────────────────────────
@@ -173,15 +174,16 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
             src = d.metadata.get("source", "Unknown")
             context_parts.append(f"Source: {src}\n{d.page_content}")
         context = "\n\n".join(context_parts)
-        
+
         retry = state.get("retry_count", 0)
         # Add feedback instruction on retry to break deterministic temp=0 loops
         if retry > 0:
             context += (
-                "\n\n[CRITICAL NOTICE: A previous generation failed relevance or grounding validation. "
-                "Ensure the new response is strictly grounded in the provided sources and does not extrapolate.]"
+                "\n\n[CRITICAL NOTICE: A previous generation failed relevance "
+                "or grounding validation. Ensure the new response is strictly "
+                "grounded in the provided sources and does not extrapolate.]"
             )
-            
+
         try:
             answer = gen_chain.invoke({
                 "question": state.get("rewritten_question") or state["question"],
@@ -222,7 +224,8 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
         except Exception:
             verdict = "yes"  # assume relevant on error
         passed = verdict == "yes"
-        print(f"   Answer relevance verdict: {'✅ addresses question' if passed else '⚠️  does not address question'}")
+        verdict_str = "✅ addresses question" if passed else "⚠️  does not address question"
+        print(f"   Answer relevance verdict: {verdict_str}")
         return {
             "answer_relevant": passed,
             "retry_count": state.get("retry_count", 0) + (0 if passed else 1),

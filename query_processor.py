@@ -137,44 +137,54 @@ MULTI_QUERY_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 STEP_BACK_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert technical assistant. Given a specific user question, generate a broader, more abstract "
-               "step-back question about the underlying general principles or concepts. Output only the step-back question.\n\n"
-               "Example 1:\n"
-               "User Query: Why did my Tesla Model 3 battery die at 20% in the snow?\n"
-               "Step-Back: How does extreme cold affect lithium-ion battery degradation?\n\n"
-               "Example 2:\n"
-               "User Query: Why does Chroma throw a sqlite3.OperationalError: table already exists?\n"
-               "Step-Back: What are the common causes of database schema conflicts in SQLite persistence?"),
+    ("system", (
+        "You are an expert technical assistant. Given a specific user question, "
+        "generate a broader, more abstract step-back question about the underlying "
+        "general principles or concepts. Output only the step-back question.\n\n"
+        "Example 1:\n"
+        "User Query: Why did my Tesla Model 3 battery die at 20% in the snow?\n"
+        "Step-Back: How does extreme cold affect lithium-ion battery degradation?\n\n"
+        "Example 2:\n"
+        "User Query: Why does Chroma throw a sqlite3.OperationalError: table already exists?\n"
+        "Step-Back: What are the common causes of database schema conflicts in "
+        "SQLite persistence?"
+    )),
     ("human", "{question}")
 ])
 
 DECOMPOSITION_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", "You are an AI assistant. Decompose the given user question into 2 or 3 smaller, sequential sub-questions "
-               "needed to formulate the final answer. Output only the sub-questions, one per line. Do not add numbering or bullet points.\n\n"
-               "Example:\n"
-               "User Query: Compare chain of thought prompting and self consistency.\n"
-               "Sub-questions:\n"
-               "What is chain of thought prompting?\n"
-               "What is self consistency in language models?\n"
-               "How do chain of thought and self consistency compare in methodology and accuracy?"),
+    ("system", (
+        "You are an AI assistant. Decompose the given user question into 2 or 3 smaller, "
+        "sequential sub-questions needed to formulate the final answer. Output only the "
+        "sub-questions, one per line. Do not add numbering or bullet points.\n\n"
+        "Example:\n"
+        "User Query: Compare chain of thought prompting and self consistency.\n"
+        "Sub-questions:\n"
+        "What is chain of thought prompting?\n"
+        "What is self consistency in language models?\n"
+        "How do chain of thought and self consistency compare in methodology and accuracy?"
+    )),
     ("human", "{question}")
 ])
 
 HYDE_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", "Write a short, hypothetical document or textbook paragraph answering the user's question. "
-               "Do not write introductions or meta-commentary, just write the factual passage directly.\n\n"
-               "Example:\n"
-               "User Query: What is task decomposition?\n"
-               "Hypothetical Answer:\n"
-               "Task decomposition is a method used to break down a complex task into smaller, manageable sub-tasks. "
-               "In the context of AI agents, techniques like Chain of Thought (CoT) or Tree of Thoughts are applied "
-               "to split multi-step problems into sequential reasoning steps, allowing the LLM to process each part individually."),
+    ("system", (
+        "Write a short, hypothetical document or textbook paragraph answering the user's question. "
+        "Do not write introductions or meta-commentary, just write the factual passage directly.\n\n"
+        "Example:\n"
+        "User Query: What is task decomposition?\n"
+        "Hypothetical Answer:\n"
+        "Task decomposition is a method used to break down a complex task into smaller, "
+        "manageable sub-tasks. In the context of AI agents, techniques like Chain of Thought "
+        "(CoT) or Tree of Thoughts are applied to split multi-step problems into sequential "
+        "reasoning steps, allowing the LLM to process each part individually."
+    )),
     ("human", "{question}")
 ])
 
 # 5. Helper Algorithms
 def compute_rrf(doc_lists: List[List[Document]], k: int = 60, top_n: int = 8) -> List[Document]:
-    """Applies Reciprocal Rank Fusion (RRF) to score and combine multiple lists of retrieved documents."""
+    """Applies Reciprocal Rank Fusion (RRF) to score and combine document lists."""
     rrf_scores: Dict[Tuple[str, str], float] = {}
     doc_map: Dict[Tuple[str, str], Document] = {}
 
@@ -182,7 +192,7 @@ def compute_rrf(doc_lists: List[List[Document]], k: int = 60, top_n: int = 8) ->
         for rank, doc in enumerate(doc_list):
             key = (doc.page_content, doc.metadata.get("source", ""))
             doc_map[key] = doc
-            
+
             # Score formula: sum( 1 / (k + rank) )
             score = 1.0 / (k + rank)
             rrf_scores[key] = rrf_scores.get(key, 0.0) + score
@@ -227,7 +237,7 @@ class RoutingRetriever(BaseRetriever):
         arbitrary_types_allowed = True
 
     def initialize_router(self):
-        """Pre-embeds routing reference samples during program startup (only for semantic routing)."""
+        """Pre-embeds routing reference samples during program startup."""
         if self.routing_method == "semantic" and self._semantic_router is None:
             self._semantic_router = SemanticRouter(self.embeddings)
 
@@ -241,7 +251,10 @@ class RoutingRetriever(BaseRetriever):
                 route = decision.route.strip().lower()
                 reason = decision.reason
             except Exception as e:
-                print(f"[WARNING] LLM routing failed: {e}. Falling back to standard route.", file=sys.stderr)
+                print(
+                    f"[WARNING] LLM routing failed: {e}. Falling back to standard route.",
+                    file=sys.stderr
+                )
                 route = "standard"
                 reason = "LLM routing engine encountered a validation error."
 
@@ -258,7 +271,10 @@ class RoutingRetriever(BaseRetriever):
             try:
                 route, score = self._semantic_router.route(query)
             except Exception as e:
-                print(f"[WARNING] Semantic routing failed: {e}. Falling back to standard route.", file=sys.stderr)
+                print(
+                    f"[WARNING] Semantic routing failed: {e}. Falling back to standard route.",
+                    file=sys.stderr
+                )
                 route = "standard"
                 score = 0.0
 
@@ -277,21 +293,24 @@ class RoutingRetriever(BaseRetriever):
             try:
                 hypothetical_answer = hyde_chain.invoke({"question": query}).content.strip()
                 
-                # Check Cosine Similarity of original query vs hypothetical answer to catch hallucination
+                # Check Cosine Similarity of query vs hypothetical answer to catch hallucination
                 query_vector = self.embeddings.embed_query(query)
                 hyde_vector = self.embeddings.embed_query(hypothetical_answer)
                 similarity = float(np.dot(query_vector, hyde_vector))
-                
+
                 # Safety similarity threshold (standard for OpenAI text-embedding-3-small)
                 threshold = 0.60
-                
+
                 print(f"⚖️ [HyDE Similarity Check] Score: {similarity:.4f} (Threshold: {threshold})")
-                
+
                 if similarity >= threshold:
-                    print(f"📝 [HyDE Passage Accepted & Querying]:\n\"{hypothetical_answer[:180]}...\"\n")
+                    print(f"📝 [HyDE Accepted & Querying]:\n\"{hypothetical_answer[:180]}...\"\n")
                     return self.base_retriever.invoke(hypothetical_answer)
                 else:
-                    print(f"⚠️ [WARNING] HyDE similarity below threshold. Hallucination drift detected. Discarding passage and falling back to original query.\n")
+                    print(
+                        "[WARNING] HyDE similarity below threshold. Hallucination drift "
+                        "detected. Discarding passage and falling back to original query.\n"
+                    )
                     return self.base_retriever.invoke(query)
             except Exception as e:
                 print(f"[ERROR] HyDE pipeline failed: {e}", file=sys.stderr)
@@ -315,7 +334,7 @@ class RoutingRetriever(BaseRetriever):
             try:
                 sub_q_text = dec_chain.invoke({"question": query}).content.strip()
                 sub_queries = [q.strip() for q in sub_q_text.split("\n") if q.strip()]
-                print(f"🧩 [Decomposed Sub-Questions]:")
+                print("🧩 [Decomposed Sub-Questions]:")
                 for idx, q in enumerate(sub_queries, 1):
                     print(f"  {idx}. {q}")
                 print()
@@ -334,7 +353,7 @@ class RoutingRetriever(BaseRetriever):
             try:
                 mq_text = mq_chain.invoke({"question": query}).content.strip()
                 queries = [query] + [q.strip() for q in mq_text.split("\n") if q.strip()]
-                print(f"🔥 [RAG-Fusion Multi-Queries Generated]:")
+                print("🔥 [RAG-Fusion Multi-Queries Generated]:")
                 for idx, q in enumerate(queries, 1):
                     print(f"  {idx}. {q}")
                 print()
@@ -350,7 +369,7 @@ class RoutingRetriever(BaseRetriever):
             try:
                 mq_text = mq_chain.invoke({"question": query}).content.strip()
                 queries = [query] + [q.strip() for q in mq_text.split("\n") if q.strip()]
-                print(f"🔄 [Multi-Query Perspectives Generated]:")
+                print("🔄 [Multi-Query Perspectives Generated]:")
                 for idx, q in enumerate(queries, 1):
                     print(f"  {idx}. {q}")
                 print()
@@ -365,7 +384,7 @@ class RoutingRetriever(BaseRetriever):
                 return self.base_retriever.invoke(query)
 
         else:
-            print(f"⚡ [Direct Route]: Standard query lookup.\n")
+            print("⚡ [Direct Route]: Standard query lookup.\n")
             return self.base_retriever.invoke(query)
 
     def _get_relevant_documents(
@@ -379,11 +398,11 @@ class RoutingRetriever(BaseRetriever):
 class SearchQuery(BaseModel):
     """Structured query analysis output holding core search term and optional filters."""
     content_search: str = Field(
-        ..., 
+        ...,
         description="The core semantic query for similarity search."
     )
     file_type: Optional[str] = Field(
-        None, 
+        None,
         description="Filter by file type. Must be one of: 'pdf', 'csv', 'docx', 'txt', 'web'."
     )
     publish_year: Optional[int] = Field(
@@ -396,11 +415,15 @@ class SearchQuery(BaseModel):
     )
     data_source: Optional[Literal["web_blogs", "academic_papers", "internal_docs"]] = Field(
         None,
-        description="Filter by data source index. 'web_blogs' for blogs/URLs, 'academic_papers' for research/scientific papers, 'internal_docs' for general local documentation files."
+        description=(
+            "Filter by data source index. 'web_blogs' for blogs/URLs, "
+            "'academic_papers' for research/scientific papers, "
+            "'internal_docs' for general local documentation files."
+        )
     )
 
 class QueryAnalyzer:
-    """Invokes structured output parsing to separate semantic search terms from hard metadata constraints."""
+    """Invokes structured parsing to separate search terms from metadata constraints."""
     def __init__(self, llm: ChatOpenAI):
         self.llm = llm
         self.structured_llm = self.llm.with_structured_output(SearchQuery)
@@ -408,16 +431,23 @@ class QueryAnalyzer:
     def analyze(self, question: str) -> SearchQuery:
         current_date_str = datetime.now().strftime("%Y-%m-%d")
         system_prompt = (
-            "You are an expert query analyzer. Your task is to split a user's natural language question "
-            "into a core semantic search query (content_search) and explicit metadata filters.\n\n"
+            "You are an expert query analyzer. Your task is to split a user's "
+            "natural language question into a core semantic search query "
+            "(content_search) and explicit metadata filters.\n\n"
             f"The current date is {current_date_str}.\n"
-            "Use this date to resolve relative dates mentioned in the question (like 'within the last year', 'published in the last 6 months', 'this year') into a specific year value.\n\n"
+            "Use this date to resolve relative dates mentioned in the question "
+            "(like 'within the last year', 'published in the last 6 months', "
+            "'this year') into a specific year value.\n\n"
             "Metadata Schema:\n"
             "- file_type: 'pdf', 'csv', 'docx', 'txt', 'web'\n"
             "- publish_year: four digit year (e.g. 2023)\n"
-            "- page_number: page number to fetch (only if user explicitly says page 2, page 5, etc.)\n"
-            "- data_source: 'web_blogs' (for blogs/web pages), 'academic_papers' (for research papers/journals), 'internal_docs' (for general local documentation)\n\n"
-            "Be precise. If any constraint is not explicitly mentioned or clearly implied, return null for that field."
+            "- page_number: page number to fetch (only if user explicitly says "
+            "page 2, page 5, etc.)\n"
+            "- data_source: 'web_blogs' (for blogs/web pages), 'academic_papers' "
+            "(for research papers/journals), 'internal_docs' (for general local "
+            "documentation)\n\n"
+            "Be precise. If any constraint is not explicitly mentioned or "
+            "clearly implied, return null for that field."
         )
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
@@ -427,6 +457,9 @@ class QueryAnalyzer:
         try:
             return chain.invoke({"question": question})
         except Exception as e:
-            print(f"[WARNING] Query analyzer failed: {e}. Falling back to default search.", file=sys.stderr)
+            print(
+                f"[WARNING] Query analyzer failed: {e}. Falling back to default search.",
+                file=sys.stderr
+            )
             return SearchQuery(content_search=question)
 
