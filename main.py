@@ -11,6 +11,7 @@ from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriev
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
 from query_processor import RoutingRetriever, QueryAnalyzer, SearchQuery
+from multi_rep_utils import restore_original_content
 
 def post_filter_documents(docs: list, query: SearchQuery) -> list:
     """Bulletproof post-filtering layer to ensure all retrieved documents strictly match constraints."""
@@ -230,7 +231,7 @@ def main():
                     from decomposition_graph import create_decomposition_graph
                     # Build and execute the cyclic LangGraph decomposition agent
                     graph = create_decomposition_graph(compression_retriever, llm)
-                    
+
                     state = graph.invoke({
                         "main_question": structured_query.content_search,
                         "sub_questions": [],
@@ -239,16 +240,43 @@ def main():
                         "retrieved_docs": [],
                         "final_answer": ""
                     })
-                    
+
                     answer = state["final_answer"]
-                    context_docs = state["retrieved_docs"]
+                    context_docs = restore_original_content(state["retrieved_docs"])
+
+                elif route in ("standard",) and (
+                    any(kw in structured_query.content_search.lower() for kw in
+                        ("compare", "versus", "difference", "evaluate", "analyse", "analyze",
+                         "pros and cons", "tradeoff", "contrast", "critique", "assessment"))
+                ):
+                    # ── Agentic CRAG + Self-RAG path (complex analytical queries) ──
+                    print("🤖 [Agentic RAG] Complex query detected. Activating CRAG + Self-RAG loop...")
+                    from agentic_graph import create_agentic_graph
+                    agentic = create_agentic_graph(compression_retriever, llm)
+                    agentic_state = agentic.invoke({
+                        "question": structured_query.content_search,
+                        "rewritten_question": "",
+                        "retrieved_docs": [],
+                        "relevant_docs": [],
+                        "answer": "",
+                        "reflection_passed": False,
+                        "retry_count": 0,
+                    })
+                    answer = agentic_state["answer"]
+                    context_docs = restore_original_content(
+                        agentic_state["relevant_docs"] or agentic_state["retrieved_docs"]
+                    )
+
                 else:
                     # Retrieve documents using chosen translation strategy
                     context_docs = routing_retriever.retrieve_for_route(structured_query.content_search, route)
-                    
+
                     # Apply final post-filtering layer to ensure perfect matches (especially for BM25)
                     context_docs = post_filter_documents(context_docs, structured_query)
-                    
+
+                    # Restore original content (swapped out during Multi-Rep indexing)
+                    context_docs = restore_original_content(context_docs)
+
                     # Generate final answer using context
                     answer = question_answer_chain.invoke({
                         "context": context_docs,

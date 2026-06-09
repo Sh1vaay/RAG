@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import re
 import bs4
 from dotenv import load_dotenv
 from langchain_community.document_loaders import (
@@ -11,11 +12,81 @@ from langchain_community.document_loaders import (
     TextLoader
 )
 from langchain_experimental.text_splitter import SemanticChunker
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
+from multi_rep_utils import generate_summaries
 
 # Load environment variables from .env file
 load_dotenv()
+
+# ── RAPTOR: Cluster + summarise helper ────────────────────────────────────────
+def build_raptor_layer(splits: list, embeddings: OpenAIEmbeddings, llm: ChatOpenAI) -> list:
+    """
+    Clusters the document chunks using Gaussian Mixture Models, then
+    generates one LLM summary per cluster.  Returns a list of Documents
+    tagged with metadata['layer'] = 'raptor_summary' so they can be
+    distinguished from raw leaf chunks during retrieval.
+    """
+    try:
+        import numpy as np
+        from sklearn.mixture import GaussianMixture
+        from langchain_core.prompts import ChatPromptTemplate
+    except ImportError:
+        print("[WARNING] scikit-learn not installed. Skipping RAPTOR. Run: uv add scikit-learn", file=sys.stderr)
+        return []
+
+    if len(splits) < 4:
+        print("[WARNING] Too few chunks for RAPTOR clustering. Skipping.", file=sys.stderr)
+        return []
+
+    print(f"🌲 [RAPTOR] Embedding {len(splits)} chunks for clustering...")
+    texts = [d.page_content for d in splits]
+    vectors = embeddings.embed_documents(texts)
+    vectors_np = np.array(vectors)
+
+    # Choose number of clusters: sqrt heuristic, capped at 10
+    n_clusters = min(max(2, int(len(splits) ** 0.5)), 10)
+    print(f"🌲 [RAPTOR] Fitting {n_clusters} clusters...")
+    gm = GaussianMixture(n_components=n_clusters, random_state=42)
+    labels = gm.fit_predict(vectors_np)
+
+    # Summarise each cluster
+    cluster_prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "You are a technical summariser. Given a group of related text passages, "
+         "write a concise 2-3 sentence thematic summary that captures the shared topic. "
+         "Output only the summary, no preamble."),
+        ("human", "{passages}")
+    ])
+    cluster_chain = cluster_prompt | llm
+
+    raptor_docs = []
+    for cluster_id in range(n_clusters):
+        indices = [i for i, l in enumerate(labels) if l == cluster_id]
+        if not indices:
+            continue
+        passages = "\n\n".join(splits[i].page_content[:400] for i in indices[:8])  # cap to avoid token limits
+        try:
+            summary = cluster_chain.invoke({"passages": passages}).content.strip()
+        except Exception as exc:
+            print(f"[WARNING] RAPTOR cluster {cluster_id} summary failed: {exc}", file=sys.stderr)
+            continue
+        raptor_docs.append(Document(
+            page_content=summary,
+            metadata={
+                "layer": "raptor_summary",
+                "cluster_id": cluster_id,
+                "source": "raptor",
+                "file_type": "raptor",
+                "year": 0,
+                "page": 0,
+                "row": 0,
+                "data_source": "internal_docs",
+            }
+        ))
+    print(f"✅ [RAPTOR] Created {len(raptor_docs)} cluster summary documents.")
+    return raptor_docs
 
 def load_single_document(file_path: str):
     """Loads a single document based on its file extension using LangChain loaders."""
@@ -90,7 +161,6 @@ def ingest_data():
         sys.exit(1)
 
     # Enrich document metadata with structured fields before splitting
-    import re
     print("Enriching document metadata with file_type, year, page, and row info...")
     for doc in docs:
         source = doc.metadata.get("source", "")
@@ -153,11 +223,26 @@ def ingest_data():
         print(f"[ERROR] Failed to split documents semantically: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # ── Multi-Representation Indexing (always on) ──────────────────────────
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    final_docs = generate_summaries(splits, llm)
+    if not final_docs:
+        # Graceful fallback: use raw splits if summary generation failed
+        print("[WARNING] Multi-Rep summaries empty, falling back to raw chunks.")
+        final_docs = splits
+
+    # ── RAPTOR layer (opt-in via --raptor flag) ────────────────────────────
+    use_raptor = "--raptor" in sys.argv
+    if use_raptor:
+        print("🌲 [RAPTOR] Building cluster summary tree (--raptor flag detected)...")
+        raptor_docs = build_raptor_layer(splits, embeddings, llm)
+        final_docs = final_docs + raptor_docs  # merge leaf summaries + cluster summaries
+        print(f"📦 Total documents to embed: {len(final_docs)} (leaves + RAPTOR summaries)")
+
     print("Embedding and saving to Chroma database...")
     try:
-        # Initialize Chroma with a persist directory to save data locally
         Chroma.from_documents(
-            documents=splits, 
+            documents=final_docs,
             embedding=embeddings,
             persist_directory="./chroma_db"
         )

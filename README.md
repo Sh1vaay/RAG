@@ -54,6 +54,9 @@ This project addresses these challenges by implementing an **offline, high-recal
 * 🔮 **Configurable Dual-Routing Engine**: Supports both a millisecond-level embedding-based **Semantic Router** (zero LLM token cost) and a structured **LLM Router** (with reasoning tags), dynamically directing questions to the optimal translation technique (HyDE, Step-Back, Decomposition, RAG-Fusion, Multi-Query, or Standard retrieval).
 * 🏷️ **Metadata Filtering & Query Analysis**: Extracts hard filters (e.g. `publish_year`, `file_type`, `page_number`, and `data_source` corpus categories) using a structured Pydantic Query Analyzer, matching them against automatically enriched metadata. Resolves relative temporal expressions (e.g. "last year") dynamically by injecting the system clock.
 * 🕸️ **Stateful LangGraph Agent**: Uses a cyclic state-graph workflow for multi-step or comparative query decomposition, handling sub-tasks sequentially with contextual memory tracking.
+* 📌 **Multi-Representation Indexing**: At ingestion time, an LLM generates a clean one-line summary for every chunk (in parallel). The vector database indexes the clean summary for accurate semantic matching, but retrieval transparently returns the full original chunk content to the answer generator.
+* 🌲 **RAPTOR Tree Summaries** *(opt-in via `--raptor` flag)*: Clusters all chunks using Gaussian Mixture Models, generates one thematic summary per cluster, and embeds these high-level summaries alongside leaf chunks so the system can answer broad, document-wide questions.
+* 🤖 **Agentic Self-Reflective RAG (CRAG + Self-RAG)**: For complex analytical queries (compare, evaluate, contrast, etc.), the pipeline activates a LangGraph CRAG loop that grades retrieved documents for relevance, rewrites the query if needed, generates an answer, and self-reflects to detect and correct hallucinations before returning the response.
 * 🧠 **Semantic Chunking**: Instead of static character-limit splits, the pipeline calculates similarity drift between consecutive sentences to keep related concepts together.
 * 🔍 **Hybrid Query Matching**: Fuses vector similarity (dense search) with term-frequency index scanning (BM25 sparse search) to capture both concepts and exact keywords.
 * ⚖️ **HyDE Hallucination Guardrail**: Performs a cosine similarity embedding check on the generated hypothetical passage, falling back to standard retrieval if similarity drops below `0.60`.
@@ -192,9 +195,11 @@ rag_project/
 ├── pyproject.toml      # Modern PEP 518/621 project configuration managed by uv
 ├── requirements.txt    # Shared dependency list
 │
-├── ingest.py           # Scraping, parsing, chunking, and embedding database pipeline
+├── ingest.py           # Scraping, parsing, chunking, Multi-Rep + RAPTOR embedding pipeline
 ├── query_processor.py  # Dynamic routing engine with 5 query translation techniques
 ├── decomposition_graph.py # Stateful LangGraph agent for cyclic decomposed queries
+├── agentic_graph.py    # CRAG + Self-RAG LangGraph agent for complex analytical queries
+├── multi_rep_utils.py  # Multi-Representation Indexing: summary generation & content restore
 ├── main.py             # User interface, database retriever load, and generation logic
 ├── playground.py       # Helper playground for similarity calculations and token sizes
 │
