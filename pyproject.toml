@@ -23,4 +23,5 @@ dependencies = [
     "scikit-learn>=1.4.0",
     "langchain-cohere>=0.1.0",
     "langgraph>=0.2.0",
+    "duckduckgo-search>=6.1.7",
 ]

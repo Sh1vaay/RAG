@@ -11,7 +11,7 @@ Graph flow:
                ├─ relevant   → generate → reflect
                │                            ├─ grounded   → END
                │                            └─ hallucination → generate (retry, max 2)
-               └─ irrelevant → rewrite_query → retrieve (loop)
+               └─ irrelevant → rewrite_query → web_search → generate → reflect
 """
 
 import sys
@@ -136,6 +136,23 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
         print(f"   Rewritten: \"{new_q}\"")
         return {"rewritten_question": new_q}
 
+    def web_search(state: AgenticState) -> dict:
+        print("🌐 [Agentic: Web Search]")
+        search_query = state.get("rewritten_question") or state["question"]
+        try:
+            from langchain_community.tools import DuckDuckGoSearchRun
+            search = DuckDuckGoSearchRun()
+            search_result = search.run(search_query)
+            # Create a Document wrapping the search results
+            web_doc = Document(
+                page_content=search_result,
+                metadata={"source": "duckduckgo", "title": "Web Search Result"}
+            )
+            return {"relevant_docs": [web_doc]}
+        except Exception as exc:
+            print(f"[ERROR] Web search failed: {exc}", file=sys.stderr)
+            return {"relevant_docs": []}
+
     def generate(state: AgenticState) -> dict:
         print("💬 [Agentic: Generate Answer]")
         docs = state["relevant_docs"] or state["retrieved_docs"]
@@ -194,6 +211,7 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
     workflow.add_node("retrieve",       retrieve)
     workflow.add_node("grade_documents", grade_documents)
     workflow.add_node("rewrite_query",  rewrite_query)
+    workflow.add_node("web_search",     web_search)
     workflow.add_node("generate",       generate)
     workflow.add_node("reflect",        reflect)
 
@@ -204,7 +222,8 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
         after_grade,
         {"generate": "generate", "rewrite_query": "rewrite_query"},
     )
-    workflow.add_edge("rewrite_query", "retrieve")
+    workflow.add_edge("rewrite_query", "web_search")
+    workflow.add_edge("web_search", "generate")
     workflow.add_edge("generate", "reflect")
     workflow.add_conditional_edges(
         "reflect",
@@ -213,3 +232,4 @@ def create_agentic_graph(retriever: BaseRetriever, llm: ChatOpenAI):
     )
 
     return workflow.compile()
+

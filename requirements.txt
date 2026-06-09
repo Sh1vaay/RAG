@@ -16,3 +16,4 @@ flashrank
 langgraph
 scikit-learn
 langchain-cohere
+duckduckgo-search
