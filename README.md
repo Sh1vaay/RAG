@@ -270,6 +270,10 @@ RERANKER_PROVIDER=flashrank
    ```bash
    uv run main.py
    ```
+4. **Launch the API Server**: Start the FastAPI backend for frontend integration:
+   ```bash
+   uv run app.py
+   ```
 
 ---
 

@@ -25,4 +25,7 @@ dependencies = [
     "langgraph>=0.2.0",
     "duckduckgo-search>=6.1.7",
     "langsmith>=0.1.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "python-multipart>=0.0.9",
 ]

@@ -18,3 +18,7 @@ scikit-learn
 langchain-cohere
 duckduckgo-search
 langsmith
+fastapi
+uvicorn
+python-multipart
+
