@@ -21,6 +21,7 @@
 * [⚡ Key Features](#-key-features)
 * [🏗️ System Architecture](#️-system-architecture)
 * [🔄 Application Request Lifecycle Flow](#-application-request-lifecycle-flow)
+* [🔀 Query Routing Decision Flow](#-query-routing-decision-flow)
 * [🛠️ Technology Stack](#️-technology-stack)
 * [🔧 Design Decisions](#-design-decisions)
 * [🔌 API Reference Specs](#-api-reference-specs)
@@ -121,8 +122,8 @@ This sequence flowchart shows how user requests are parsed, routed, retrieved, g
 ```mermaid
 flowchart TD
     Start(["🧑‍💻 User Query"]) --> Contextualize{"📜 Has Chat History?"}
-    Contextualize -->|Yes| RewriteQ["🤖 GPT-4o-mini<br/>(Generate Standalone Question)"]
-    Contextualize -->|No| UseOriginal["Use Original Question"]
+    Contextualize -->|"Yes"| RewriteQ["🤖 GPT-4o-mini<br/>(Generate Standalone Question)"]
+    Contextualize -->|"No"| UseOriginal["Use Original Question"]
     
     RewriteQ --> RouteStep
     UseOriginal --> RouteStep
@@ -130,40 +131,140 @@ flowchart TD
     RouteStep["🔮 Router Classifies Query"] --> RouteDecision{"Select Route"}
     
     %% Fast Path
-    RouteDecision -->|⚡ simple| FastPath["🚀 Fast Path Bypass"]
+    RouteDecision -->|"⚡ simple"| FastPath["🚀 Fast Path Bypass"]
     FastPath --> FastRetrieve["Basic Retrieve k=3"]
     FastRetrieve --> FastGen["🤖 GPT-4o-mini Q&A"]
     FastGen --> EndResponse
     
     %% Heavy Path
-    RouteDecision -->|🧠 complex / multi-hop| Analyzer["🔬 Pydantic Query Analyzer"]
+    RouteDecision -->|"🧠 complex / multi-hop"| Analyzer["🔬 Pydantic Query Analyzer"]
     Analyzer --> ExtractedFilters["🎯 Extracted Metadata Filters"]
     ExtractedFilters --> HybridSearch["🔀 Hybrid Retrieve: FAISS + BM25 + RRF"]
     
     HybridSearch --> DecisionWorkflow{"Route Type?"}
     
     %% Decomposition
-    DecisionWorkflow -->|decomposition| GraphDec["🕸️ LangGraph Multi-Hop Agent"]
+    DecisionWorkflow -->|"decomposition"| GraphDec["🕸️ LangGraph Multi-Hop Agent"]
     GraphDec --> SubQ["Decompose Sub-Questions"]
     SubQ --> SequentialAns["Answer Sequentially with Context Memory"]
     SequentialAns --> Synthesis["Synthesize Final Answer"]
     
     %% Standard / CRAG / Self-RAG
-    DecisionWorkflow -->|standard / fusion / step_back / hyde| GraphCRAG["🕸️ LangGraph Self-Correcting Agent"]
+    DecisionWorkflow -->|"standard / fusion / step_back / hyde"| GraphCRAG["🕸️ LangGraph Self-Correcting Agent"]
     GraphCRAG --> Grader["⚖️ Grade Retrieved Documents"]
-    Grader -->|❌ Irrelevant| Rewriter["✏️ Query Rewriter"]
+    Grader -->|"❌ Irrelevant"| Rewriter["✏️ Query Rewriter"]
     Rewriter --> WebSearch["🌐 DuckDuckGo Web Search"]
     WebSearch --> GenResponse
     
-    Grader -->|✅ Relevant| GenResponse["💡 Generate Grounded Response"]
+    Grader -->|"✅ Relevant"| GenResponse["💡 Generate Grounded Response"]
     
     GenResponse --> SelfReflect{"🪞 Hallucination Grader"}
-    SelfReflect -->|⚠️ Hallucinated| Rewriter
-    SelfReflect -->|✅ Grounded| AnswerRelevance{"✅ Answer Grader"}
-    AnswerRelevance -->|❌ Off-Topic| Rewriter
-    AnswerRelevance -->|✅ Addresses Q| Synthesis
+    SelfReflect -->|"⚠️ Hallucinated"| Rewriter
+    SelfReflect -->|"✅ Grounded"| AnswerRelevance{"✅ Answer Grader"}
+    AnswerRelevance -->|"❌ Off-Topic"| Rewriter
+    AnswerRelevance -->|"✅ Addresses Q"| Synthesis
     
     Synthesis --> EndResponse(["🎯 Final Response + Citations"])
+```
+
+---
+
+## 🔀 Query Routing Decision Flow
+
+The diagram below details the step-by-step decision routing logic executed within the `RoutingRetriever` (both Semantic and LLM-based) and the main runtime orchestrator:
+
+```mermaid
+flowchart TD
+    Start(["🧑‍💻 User Query"]) --> ContextCheck{"📜 Has Chat History?"}
+    ContextCheck -->|"Yes"| Rewrite["🤖 GPT-4o-mini Q-Rewriter<br/>(Generate Standalone Question)"]
+    ContextCheck -->|"No"| Standalone["Use Original Question"]
+    
+    Rewrite --> RouteEngine
+    Standalone --> RouteEngine
+    
+    subgraph RouteEngine ["🔮 Routing Switchboard (RoutingRetriever)"]
+        DetermineMethod{"Check ROUTING_METHOD"}
+        
+        DetermineMethod -->|"llm"| LLMRoute["🤖 GPT-4o-mini Structured Routing<br/>(RouteSelection schema)"]
+        DetermineMethod -->|"semantic (default)"| SemRoute["⚡ Zero-Dependency Semantic Router<br/>(Cosine Similarity vs Reference Samples)"]
+        
+        LLMRoute --> RouteCheck
+        SemRoute --> SimilarityCheck{"Max Similarity >= 0.40?"}
+        SimilarityCheck -->|"Yes"| RouteCheck{"Select Route"}
+        SimilarityCheck -->|"No"| StandardFallback["standard"]
+        
+        RouteCheck -->|"simple"| RouteSimple["simple"]
+        RouteCheck -->|"hyde"| RouteHyDE["hyde"]
+        RouteCheck -->|"step_back"| RouteSB["step_back"]
+        RouteCheck -->|"decomposition"| RouteDec["decomposition"]
+        RouteCheck -->|"rag_fusion"| RouteFusion["rag_fusion"]
+        RouteCheck -->|"multi_query"| RouteMQ["multi_query"]
+        RouteCheck -->|"standard"| RouteStd["standard"]
+        StandardFallback --> RouteStd
+    end
+
+    RouteSimple -->|"⚡ Bypasses Heavy Pipeline"| FastPath
+    RouteHyDE --> HeavyPath
+    RouteSB --> HeavyPath
+    RouteDec --> HeavyPath
+    RouteFusion --> HeavyPath
+    RouteMQ --> HeavyPath
+    RouteStd --> HeavyPath
+
+    subgraph FastPath ["⚡ Fast Path (Low-Latency Bypass)"]
+        ExecuteFast["Retrieve Basic (k=3)"] --> GenFast["🤖 Q&A (gpt-4o-mini)"]
+    end
+
+    subgraph HeavyPath ["🧠 Heavy Path Workflows"]
+        QA["🔬 Pydantic Query Analyzer"] --> ExtractFilters["Extract Metadata Filters<br/>(file_type, year, page, source)"]
+        ExtractFilters --> ApplyFilters["Apply Hard Filters to FAISS Vector DB"]
+        
+        ApplyFilters --> RouteDispatcher{"Route Check & Context Match?"}
+        
+        %% Decomposition Graph
+        RouteDispatcher -->|"decomposition"| GraphDec["🕸️ LangGraph Decomposition Agent"]
+        GraphDec --> SubQ["Decompose into sequential sub-questions"]
+        SubQ --> SolveSub["Answer sequentially with memory"]
+        SolveSub --> SynthesizeDec["Synthesize Final Response"]
+        
+        %% Self-RAG / CRAG Graph
+        RouteDispatcher -->|"standard + comparative keywords"| GraphAgentic["🕸️ LangGraph Self-Correcting Agent"]
+        GraphAgentic --> GradeDocs{"Grade Retrieved Documents"}
+        GradeDocs -->|"❌ Irrelevant"| CRAGWeb["🌐 DuckDuckGo Web Search Fallback"]
+        GradeDocs -->|"✅ Relevant"| GenGrounded["Generate Grounded Answer"]
+        CRAGWeb --> GenGrounded
+        GenGrounded --> SelfRAGGrade{"🪞 Hallucination & Relevance Grader"}
+        SelfRAGGrade -->|"❌ Failed"| Rewriter["✏️ Query Rewriter"] --> CRAGWeb
+        SelfRAGGrade -->|"✅ Passed"| SynthesizeAgentic["Compile Final Response"]
+        
+        %% Retriever Translation paths
+        RouteDispatcher -->|"hyde / step_back / rag_fusion / multi_query / standard"| RunRetrievalStrategy{"Retrieve with Strategy"}
+        
+        RunRetrievalStrategy -->|"hyde"| HyDECheck{"HyDE Similarity >= 0.60?"}
+        HyDECheck -->|"Yes"| RetrieveHyDE["Retrieve using hypothetical passage"]
+        HyDECheck -->|"No"| RetrieveOrig["Retrieve using original question"]
+        
+        RunRetrievalStrategy -->|"step_back"| RetrieveSBQuery["Retrieve for original + abstract concept queries"]
+        
+        RunRetrievalStrategy -->|"rag_fusion"| RetrieveRRF["Retrieve multi-perspectives in parallel + RRF (k=60, top_n=8)"]
+        
+        RunRetrievalStrategy -->|"multi_query"| RetrieveMQQueries["Retrieve multi-perspectives in parallel & merge"]
+        
+        RunRetrievalStrategy -->|"standard"| RetrieveDirect["Retrieve directly using Compression Retriever"]
+        
+        RetrieveHyDE & RetrieveOrig & RetrieveSBQuery & RetrieveRRF & RetrieveMQQueries & RetrieveDirect --> PostFilter["Apply Post-Filtering on Metadata"]
+        PostFilter --> RestoreContent["Restore original content (swap back Multi-Rep summaries)"]
+        RestoreContent --> GenStandard["🤖 GPT-4o-mini Q&A Chain"]
+    end
+
+    GenFast --> EndResponse(["🎯 Output Response + Citations"])
+    SynthesizeDec --> EndResponse
+    SynthesizeAgentic --> EndResponse
+    GenStandard --> EndResponse
+
+    style FastPath fill:#f0f9ff,stroke:#0284c7,stroke-dasharray: 5 5,stroke-width:2px
+    style HeavyPath fill:#faf5ff,stroke:#7e22ce,stroke-dasharray: 5 5,stroke-width:2px
+    style RouteEngine fill:#f8fafc,stroke:#475569,stroke-dasharray: 5 5,stroke-width:2px
 ```
 
 ---

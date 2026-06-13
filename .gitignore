@@ -40,3 +40,7 @@ test_imports.log
 
 # Linter caches
 .ruff_cache/
+
+# Development planning and resume points
+RESUME_POINTS.md
+IMPLEMENTATION_DETAILS.md
