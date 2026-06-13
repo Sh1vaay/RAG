@@ -68,30 +68,45 @@ Standard Retrieval-Augmented Generation (RAG) systems frequently struggle in pro
 The following diagram illustrates Aether AI's multi-layered layout, showing data flows from document ingestion down to response validation:
 
 ```mermaid
-graph TB
+flowchart TD
+    %% Styling
+    classDef default fill:#fafafa,stroke:#ccc,stroke-width:1px;
+    classDef uiStyle fill:#f0fdf4,stroke:#15803d,stroke-dasharray:5 5,stroke-width:2px;
+    classDef apiStyle fill:#f0f9ff,stroke:#0369a1,stroke-dasharray:5 5,stroke-width:2px;
+    classDef dataStyle fill:#fef3c7,stroke:#b45309,stroke-dasharray:5 5,stroke-width:2px;
+    classDef extStyle fill:#faf5ff,stroke:#6b21a8,stroke-dasharray:5 5,stroke-width:2px;
+
     subgraph UI ["🖥️ Presentation Layer (Frontend / Client)"]
+        direction TB
         Browser["🌐 Web Browser (HTML5/JS Dashboard)"]
         CLI["💻 CLI Client (src/main.py)"]
     end
+    class UI uiStyle;
 
     subgraph API ["⚡ API & Orchestration Layer (Backend)"]
+        direction TB
         FastAPI["🚀 FastAPI App (src/app.py)"]
         Router["🔀 Query Switchboard (src/query_processor.py)"]
         LangGraph["🕸️ LangGraph Agents (src/agentic_graph.py / src/decomposition_graph.py)"]
     end
+    class API apiStyle;
 
     subgraph DATA ["💾 Data & Storage Layer"]
+        direction TB
         FAISS["🧲 FAISS Vector DB"]
         BM25["📄 BM25 Sparse Index"]
         FS["📁 File System (staged PDFs/DOCX)"]
     end
+    class DATA dataStyle;
 
     subgraph EXT ["🌐 External Services"]
+        direction TB
         OpenAI["🤖 OpenAI API (gpt-4o-mini & embeddings)"]
         Cohere["☁️ Cohere Rerank API (Optional)"]
         DDG["🌍 DuckDuckGo (CRAG Web Search)"]
         LangSmith["📊 LangSmith (Tracing & Observability)"]
     end
+    class EXT extStyle;
 
     Browser <-->|HTTP / JSON| FastAPI
     CLI <-->|Local Python Calls| Router
@@ -185,30 +200,23 @@ flowchart TD
     subgraph RouteEngine ["🔮 Routing Switchboard (RoutingRetriever)"]
         DetermineMethod{"Check ROUTING_METHOD"}
         
-        DetermineMethod -->|"llm"| LLMRoute["🤖 GPT-4o-mini Structured Routing<br/>(RouteSelection schema)"]
-        DetermineMethod -->|"semantic (default)"| SemRoute["⚡ Zero-Dependency Semantic Router<br/>(Cosine Similarity vs Reference Samples)"]
+        DetermineMethod -->|"llm"| LLMRoute["🤖 GPT-4o-mini Structured Routing"]
+        DetermineMethod -->|"semantic (default)"| SemRoute["⚡ Zero-Dependency Semantic Router"]
         
-        LLMRoute --> RouteCheck
+        LLMRoute --> RouteCheck{"Select Route"}
         SemRoute --> SimilarityCheck{"Max Similarity >= 0.40?"}
-        SimilarityCheck -->|"Yes"| RouteCheck{"Select Route"}
-        SimilarityCheck -->|"No"| StandardFallback["standard"]
         
-        RouteCheck -->|"simple"| RouteSimple["simple"]
-        RouteCheck -->|"hyde"| RouteHyDE["hyde"]
-        RouteCheck -->|"step_back"| RouteSB["step_back"]
-        RouteCheck -->|"decomposition"| RouteDec["decomposition"]
-        RouteCheck -->|"rag_fusion"| RouteFusion["rag_fusion"]
-        RouteCheck -->|"multi_query"| RouteMQ["multi_query"]
-        RouteCheck -->|"standard"| RouteStd["standard"]
+        SimilarityCheck -->|"Yes"| RouteCheck
+        SimilarityCheck -->|"No"| StandardFallback["Fallback: standard"]
+        
+        RouteCheck -->|"simple"| RouteSimple["Route: simple"]
+        RouteCheck -->|"decomposition"| RouteDec["Route: decomposition"]
+        RouteCheck -->|"standard / translation"| RouteStd["Route: standard / strategy"]
         StandardFallback --> RouteStd
     end
 
     RouteSimple -->|"⚡ Bypasses Heavy Pipeline"| FastPath
-    RouteHyDE --> HeavyPath
-    RouteSB --> HeavyPath
     RouteDec --> HeavyPath
-    RouteFusion --> HeavyPath
-    RouteMQ --> HeavyPath
     RouteStd --> HeavyPath
 
     subgraph FastPath ["⚡ Fast Path (Low-Latency Bypass)"]
@@ -228,7 +236,7 @@ flowchart TD
         SolveSub --> SynthesizeDec["Synthesize Final Response"]
         
         %% Self-RAG / CRAG Graph
-        RouteDispatcher -->|"standard + comparative keywords"| GraphAgentic["🕸️ LangGraph Self-Correcting Agent"]
+        RouteDispatcher -->|"standard + comparative"| GraphAgentic["🕸️ LangGraph Self-Correcting Agent"]
         GraphAgentic --> GradeDocs{"Grade Retrieved Documents"}
         GradeDocs -->|"❌ Irrelevant"| CRAGWeb["🌐 DuckDuckGo Web Search Fallback"]
         GradeDocs -->|"✅ Relevant"| GenGrounded["Generate Grounded Answer"]
@@ -238,22 +246,9 @@ flowchart TD
         SelfRAGGrade -->|"✅ Passed"| SynthesizeAgentic["Compile Final Response"]
         
         %% Retriever Translation paths
-        RouteDispatcher -->|"hyde / step_back / rag_fusion / multi_query / standard"| RunRetrievalStrategy{"Retrieve with Strategy"}
-        
-        RunRetrievalStrategy -->|"hyde"| HyDECheck{"HyDE Similarity >= 0.60?"}
-        HyDECheck -->|"Yes"| RetrieveHyDE["Retrieve using hypothetical passage"]
-        HyDECheck -->|"No"| RetrieveOrig["Retrieve using original question"]
-        
-        RunRetrievalStrategy -->|"step_back"| RetrieveSBQuery["Retrieve for original + abstract concept queries"]
-        
-        RunRetrievalStrategy -->|"rag_fusion"| RetrieveRRF["Retrieve multi-perspectives in parallel + RRF (k=60, top_n=8)"]
-        
-        RunRetrievalStrategy -->|"multi_query"| RetrieveMQQueries["Retrieve multi-perspectives in parallel & merge"]
-        
-        RunRetrievalStrategy -->|"standard"| RetrieveDirect["Retrieve directly using Compression Retriever"]
-        
-        RetrieveHyDE & RetrieveOrig & RetrieveSBQuery & RetrieveRRF & RetrieveMQQueries & RetrieveDirect --> PostFilter["Apply Post-Filtering on Metadata"]
-        PostFilter --> RestoreContent["Restore original content (swap back Multi-Rep summaries)"]
+        RouteDispatcher -->|"standard / strategy routes"| StrategyRetrieval["⚡ Strategy Retrieval Engine<br/>- Standard (Compression)<br/>- Step-Back (Original + Abstract)<br/>- HyDE (Hypothetical Passage)<br/>- RAG-Fusion (RRF / Parallel Retrieval)<br/>- Multi-Query (Parallel & Merge)"]
+        StrategyRetrieval --> PostFilter["Apply Post-Filtering on Metadata"]
+        PostFilter --> RestoreContent["Restore original content (swap back summaries)"]
         RestoreContent --> GenStandard["🤖 GPT-4o-mini Q&A Chain"]
     end
 
