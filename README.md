@@ -8,7 +8,7 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Package Manager](https://img.shields.io/badge/UV-Package%20Manager-00D2B4?style=for-the-badge&logo=cargo&logoColor=white)](https://github.com/astral-sh/uv)
-[![Framework](https://img.shields.io/badge/LangChain-v1.0%2B-F15A24?style=for-the-badge&logo=chainlink&logoColor=white)](https://github.com/langchain-ai/langchain)
+[![Framework](https://img.shields.io/badge/LangGraph-v0.2%2B-F15A24?style=for-the-badge&logo=chainlink&logoColor=white)](https://github.com/langchain-ai/langgraph)
 [![VectorDB](https://img.shields.io/badge/FAISS-VectorStore-blue?style=for-the-badge&logo=facebook&logoColor=white)](https://github.com/facebookresearch/faiss)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
@@ -19,10 +19,10 @@
 ## 🗺️ Table of Contents
 * [🪐 Project Overview](#-project-overview)
 * [⚡ Key Features](#-key-features)
-* [🏗️ System Architecture](#️-system-architecture)
+* [🏗️ System Architecture](#-system-architecture)
 * [🔄 Application Request Lifecycle Flow](#-application-request-lifecycle-flow)
 * [🔀 Query Routing Decision Flow](#-query-routing-decision-flow)
-* [🛠️ Technology Stack](#️-technology-stack)
+* [🛠️ Technology Stack](#-technology-stack)
 * [🔧 Design Decisions](#-design-decisions)
 * [🔌 API Reference Specs](#-api-reference-specs)
 * [📁 Folder Structure](#-folder-structure)
@@ -34,6 +34,7 @@
 * [🐳 Production Deployment (Docker)](#-production-deployment-docker)
 * [🔒 Security & Hardening Policy](#-security--hardening-policy)
 * [📈 Performance, Scalability & Observability](#-performance-scalability--observability)
+* [🛠️ Troubleshooting & FAQs](#-troubleshooting--faqs)
 * [🤝 Contributing Guidelines](#-contributing-guidelines)
 * [📄 License](#-license)
 
@@ -65,67 +66,58 @@ Standard Retrieval-Augmented Generation (RAG) systems frequently struggle in pro
 
 ## 🏗️ System Architecture
 
-The following diagram illustrates Aether AI's multi-layered layout, showing data flows from document ingestion down to response validation:
+Aether AI utilizes a decoupled multi-layer structure, segregating user interfaces, backend APIs, data pipelines, local databases, and external LLM services.
 
 ```mermaid
-flowchart TD
-    %% Styling
-    classDef default fill:#fafafa,stroke:#ccc,stroke-width:1px;
-    classDef uiStyle fill:#f0fdf4,stroke:#15803d,stroke-dasharray:5 5,stroke-width:2px;
-    classDef apiStyle fill:#f0f9ff,stroke:#0369a1,stroke-dasharray:5 5,stroke-width:2px;
-    classDef dataStyle fill:#fef3c7,stroke:#b45309,stroke-dasharray:5 5,stroke-width:2px;
-    classDef extStyle fill:#faf5ff,stroke:#6b21a8,stroke-dasharray:5 5,stroke-width:2px;
+graph TD
+    classDef client fill:#eef2ff,stroke:#6366f1,stroke-width:2px;
+    classDef api fill:#f0fdf4,stroke:#22c55e,stroke-width:2px;
+    classDef data fill:#fffbeb,stroke:#f59e0b,stroke-width:2px;
+    classDef ext fill:#faf5ff,stroke:#a855f7,stroke-width:2px;
 
-    subgraph UI ["🖥️ Presentation Layer (Frontend / Client)"]
-        direction TB
-        Browser["🌐 Web Browser (HTML5/JS Dashboard)"]
-        CLI["💻 CLI Client (src/main.py)"]
+    subgraph Client ["🖥️ Presentation Layer"]
+        Browser["🌐 Web Dashboard (HTML5/Tailwind/JS)"]
+        CLI["💻 CLI Interface (src/main.py)"]
     end
-    class UI uiStyle;
+    class Browser,CLI client;
 
-    subgraph API ["⚡ API & Orchestration Layer (Backend)"]
-        direction TB
-        FastAPI["🚀 FastAPI App (src/app.py)"]
-        Router["🔀 Query Switchboard (src/query_processor.py)"]
-        LangGraph["🕸️ LangGraph Agents (src/agentic_graph.py / src/decomposition_graph.py)"]
+    subgraph Backend ["⚡ API & Execution Layer"]
+        FastAPI["🚀 FastAPI Server (src/app.py)"]
+        Router["🔮 Routing Switchboard (RoutingRetriever)"]
+        Analyzer["🔬 Pydantic Query Analyzer"]
+        LangGraph["🕸️ LangGraph Orchestrator"]
     end
-    class API apiStyle;
+    class FastAPI,Router,Analyzer,LangGraph api;
 
-    subgraph DATA ["💾 Data & Storage Layer"]
-        direction TB
-        FAISS["🧲 FAISS Vector DB"]
+    subgraph Storage ["💾 Storage & Context Layer"]
+        FAISS["🧲 FAISS Vector Index"]
         BM25["📄 BM25 Sparse Index"]
-        FS["📁 File System (staged PDFs/DOCX)"]
+        FS["📁 File System (Raw Documents)"]
     end
-    class DATA dataStyle;
+    class FAISS,BM25,FS data;
 
-    subgraph EXT ["🌐 External Services"]
-        direction TB
-        OpenAI["🤖 OpenAI API (gpt-4o-mini & embeddings)"]
+    subgraph Services ["🌍 External API Layer"]
+        OpenAI["🤖 OpenAI API (Embeddings/LLM)"]
         Cohere["☁️ Cohere Rerank API (Optional)"]
-        DDG["🌍 DuckDuckGo (CRAG Web Search)"]
-        LangSmith["📊 LangSmith (Tracing & Observability)"]
+        DDG["🔍 DuckDuckGo (CRAG Search)"]
+        LangSmith["📊 LangSmith Telemetry"]
     end
-    class EXT extStyle;
+    class OpenAI,Cohere,DDG,LangSmith ext;
 
     Browser <-->|HTTP / JSON| FastAPI
     CLI <-->|Local Python Calls| Router
     FastAPI --> Router
-    Router -->|Orchestrates| LangGraph
+    Router --> Analyzer
+    Analyzer --> LangGraph
     
-    %% Data retrieval
-    LangGraph -->|Read Vectors| FAISS
-    LangGraph -->|Read Keyword Index| BM25
-    FastAPI -->|Load Documents| FS
+    LangGraph -->|Read Chunks| FAISS
+    LangGraph -->|Keyword Match| BM25
+    FastAPI -->|Stage Files| FS
     
-    %% External API calls
-    LangGraph -->|Embeddings / Gen| OpenAI
-    Router -->|Embeddings / Gen| OpenAI
-    LangGraph -->|Rerank Context| Cohere
-    LangGraph -->|Web Search| DDG
-    FastAPI -->|Telemetry| LangSmith
-    LangGraph -->|Telemetry| LangSmith
-    Router -->|Telemetry| LangSmith
+    LangGraph --> OpenAI
+    LangGraph --> Cohere
+    LangGraph --> DDG
+    LangGraph --> LangSmith
 ```
 
 ---
@@ -135,51 +127,60 @@ flowchart TD
 This sequence flowchart shows how user requests are parsed, routed, retrieved, graded, and validated:
 
 ```mermaid
-flowchart TD
-    Start(["🧑‍💻 User Query"]) --> Contextualize{"📜 Has Chat History?"}
-    Contextualize -->|"Yes"| RewriteQ["🤖 GPT-4o-mini<br/>(Generate Standalone Question)"]
-    Contextualize -->|"No"| UseOriginal["Use Original Question"]
+sequenceDiagram
+    autonumber
+    actor User as User Dashboard / CLI
+    participant API as FastAPI / Main Loop
+    participant Router as Routing Switchboard
+    participant Analyzer as Pydantic Analyzer
+    participant DB as FAISS / BM25 Store
+    participant Graph as LangGraph Agent
+    participant LLM as OpenAI / Rerank
+
+    User->>API: Send Chat Query (message, history)
+    API->>LLM: Contextualize Query (Stand-alone question)
+    LLM-->>API: stand_alone_query
+    API->>Router: determine_route(stand_alone_query)
     
-    RewriteQ --> RouteStep
-    UseOriginal --> RouteStep
-    
-    RouteStep["🔮 Router Classifies Query"] --> RouteDecision{"Select Route"}
-    
-    %% Fast Path
-    RouteDecision -->|"⚡ simple"| FastPath["🚀 Fast Path Bypass"]
-    FastPath --> FastRetrieve["Basic Retrieve k=3"]
-    FastRetrieve --> FastGen["🤖 GPT-4o-mini Q&A"]
-    FastGen --> EndResponse
-    
-    %% Heavy Path
-    RouteDecision -->|"🧠 complex / multi-hop"| Analyzer["🔬 Pydantic Query Analyzer"]
-    Analyzer --> ExtractedFilters["🎯 Extracted Metadata Filters"]
-    ExtractedFilters --> HybridSearch["🔀 Hybrid Retrieve: FAISS + BM25 + RRF"]
-    
-    HybridSearch --> DecisionWorkflow{"Route Type?"}
-    
-    %% Decomposition
-    DecisionWorkflow -->|"decomposition"| GraphDec["🕸️ LangGraph Multi-Hop Agent"]
-    GraphDec --> SubQ["Decompose Sub-Questions"]
-    SubQ --> SequentialAns["Answer Sequentially with Context Memory"]
-    SequentialAns --> Synthesis["Synthesize Final Answer"]
-    
-    %% Standard / CRAG / Self-RAG
-    DecisionWorkflow -->|"standard / fusion / step_back / hyde"| GraphCRAG["🕸️ LangGraph Self-Correcting Agent"]
-    GraphCRAG --> Grader["⚖️ Grade Retrieved Documents"]
-    Grader -->|"❌ Irrelevant"| Rewriter["✏️ Query Rewriter"]
-    Rewriter --> WebSearch["🌐 DuckDuckGo Web Search"]
-    WebSearch --> GenResponse
-    
-    Grader -->|"✅ Relevant"| GenResponse["💡 Generate Grounded Response"]
-    
-    GenResponse --> SelfReflect{"🪞 Hallucination Grader"}
-    SelfReflect -->|"⚠️ Hallucinated"| Rewriter
-    SelfReflect -->|"✅ Grounded"| AnswerRelevance{"✅ Answer Grader"}
-    AnswerRelevance -->|"❌ Off-Topic"| Rewriter
-    AnswerRelevance -->|"✅ Addresses Q"| Synthesis
-    
-    Synthesis --> EndResponse(["🎯 Final Response + Citations"])
+    alt Route: simple (Fast Path Bypass)
+        Router-->>API: Route: "simple"
+        API->>DB: Basic Vector Query (k=3)
+        DB-->>API: vector_chunks
+        API->>LLM: Stuff QA Prompt
+        LLM-->>API: final_response
+    else Route: standard / decomposition (Heavy Path)
+        Router-->>API: Route: "standard" / "decomposition"
+        API->>Analyzer: analyze(stand_alone_query)
+        Analyzer-->>API: SearchQuery (content, filters)
+        
+        API->>DB: Hybrid Search (FAISS + BM25) + RRF
+        DB-->>API: candidates
+        
+        alt Mode: LangGraph Multi-Hop Decomposition
+            API->>Graph: Invoke Decomposition Graph
+            loop Each Decomposed Sub-Question
+                Graph->>DB: Query Sub-Question Context
+                DB-->>Graph: context
+                Graph->>LLM: Solve Sub-Question
+                LLM-->>Graph: sub_answer
+            end
+            Graph-->>API: synthesized_response
+        else Mode: LangGraph Self-RAG / CRAG
+            API->>Graph: Invoke Self-Correcting Graph
+            Graph->>LLM: Grade Context Documents
+            alt Documents Irrelevant
+                Graph->>LLM: Rewrite Query
+                Graph->>LLM: Run Web Search (DuckDuckGo)
+            end
+            Graph->>LLM: Generate Grounded Answer
+            loop Validation Grader Loop
+                Graph->>LLM: Grade Hallucination
+                Graph->>LLM: Grade Answer Relevance
+            end
+            LLM-->>API: verified_response
+        end
+    end
+    API-->>User: ChatResponse (answer, route, sources)
 ```
 
 ---
@@ -272,7 +273,7 @@ flowchart TD
 * **Sparse Search Engine**: [Rank-BM25](https://github.com/dorianbrown/rank_bm25).
 * **Reranker Model**: [Flashrank](https://github.com/prithivida/flashrank) running local quantized cross-encoders via ONNX Runtime.
 * **API Framework**: [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/) ASGI server.
-* **Frontend**: Vanilla HTML5/JS single-page dashboard styled with Tailwind CSS (Glassmorphism theme).
+* **Frontend**: Vanilla HTML5/JS single-page dashboard styled with Tailwind CSS (Premium Glassmorphic Light/Dark mode).
 * **Document Parsing**: `pypdf`, `docx2txt`, `beautifulsoup4`, `csv`.
 
 ---
@@ -298,6 +299,116 @@ flowchart TD
 | **POST** | `/api/chat` | Evaluates query and executes RAG pipeline | `ChatRequest` | `ChatResponse` |
 | **POST** | `/api/upload` | Uploads raw documents safely to `./documents/` | Multipart Files | List of saved filenames |
 | **POST** | `/api/ingest` | Parses staged files and builds vector DB | Query: `raptor` (bool) | Ingestion log snippet |
+
+---
+
+### Endpoint Payloads & Examples
+
+#### 1. `GET /api/status`
+Returns metadata regarding the database status, environment state, active configurations, and list of staged files ready for ingestion.
+
+* **Response Example (`200 OK`)**:
+```json
+{
+  "status": "ready",
+  "database_loaded": true,
+  "document_chunks": 348,
+  "routing_method": "semantic",
+  "reranker_provider": "flashrank",
+  "openai_api_key_configured": true,
+  "langsmith_tracing": false,
+  "staged_files": [
+    {
+      "name": "company_handbook.pdf",
+      "size": "1.24 MB",
+      "status": "ready"
+    }
+  ]
+}
+```
+
+#### 2. `POST /api/config`
+Updates configurations dynamically in memory and updates process environment variables, then triggers a clean reload of the active pipeline.
+
+* **Request Schema (`ConfigUpdateRequest`)**:
+```json
+{
+  "routing_method": "llm",
+  "reranker_provider": "cohere",
+  "openai_key": "sk-proj-OptionalKeyHere",
+  "cohere_key": "co-OptionalCohereKeyHere"
+}
+```
+* **Response Example (`200 OK`)**:
+```json
+{
+  "status": "success",
+  "message": "Configuration updated and pipeline re-initialized."
+}
+```
+
+#### 3. `POST /api/chat`
+Submits a user query along with session history to be analyzed, routed, searched, reranked, and validated through LangGraph agents.
+
+* **Request Schema (`ChatRequest`)**:
+```json
+{
+  "message": "What were the financial results for the 2025 fiscal year?",
+  "history": [
+    {
+      "role": "user",
+      "content": "Hello Aether AI"
+    },
+    {
+      "role": "assistant",
+      "content": "Hello! How can I help you index or search your data today?"
+    }
+  ]
+}
+```
+* **Response Example (`200 OK`)**:
+```json
+{
+  "answer": "According to the financial reports, the 2025 fiscal year yielded $12.4M in revenue...",
+  "route": "standard",
+  "sources": [
+    {
+      "title": "financial_report_2025.pdf",
+      "source": "./documents/financial_report_2025.pdf",
+      "page": 4,
+      "snippet": "Net revenue for the fiscal year 2025 reached $12.4M, surpassing projections."
+    }
+  ]
+}
+```
+
+#### 4. `POST /api/upload`
+Uploads raw PDF, DOCX, CSV, or Text files to the local `./documents` directory. Accepts multiple files under the multipart key `files`.
+
+* **Request**: `multipart/form-data` with files array.
+* **Response Example (`200 OK`)**:
+```json
+{
+  "status": "success",
+  "uploaded_files": [
+    "company_policy_v2.pdf",
+    "faq.docx"
+  ]
+}
+```
+
+#### 5. `POST /api/ingest`
+Triggers the asynchronous parsing, semantic splitting, GMM-based hierarchical tree clustering (if `raptor` is enabled), and local FAISS/BM25 database building.
+
+* **Query Parameter**: `raptor` (boolean, optional, default: `false`).
+* **Response Example (`200 OK`)**:
+```json
+{
+  "status": "success",
+  "message": "Ingestion completed and DB index reloaded.",
+  "output": "Loading documents...\nProcessing: company_policy_v2.pdf\nSemantic splitting completed...\nBuilding FAISS database indices...\nSaved vector store."
+}
+```
 
 ---
 
@@ -358,6 +469,8 @@ rag_project/
    uv sync
    ```
 
+*(Alternatively, if not using `uv`, you can install standard packages using `pip install -r requirements.txt` inside a python 3.12 virtual environment).*
+
 ### Ingesting Documents
 
 Place your files in `./documents/`, then run the parser:
@@ -388,7 +501,7 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser to access th
 
 ## 🐳 Production Deployment (Docker)
 
-This project uses a secure multi-stage Docker build to build lightweight runtime containers.
+This project uses a secure multi-stage Docker build to compile lightweight runtime containers.
 
 1. **Build the Container Image**:
    ```bash
@@ -409,21 +522,43 @@ This project uses a secure multi-stage Docker build to build lightweight runtime
 
 ## 🔒 Security & Hardening Policy
 
-* **Dependencies Hardening**: Vulnerable packages prone to arbitrary code execution during deserialization or pickling have been removed from the dependency tree.
-* **Dynamic Config Verification**: Dynamic configs via `/api/config` are validated against schemas before being applied, protecting the backend from runtime injection.
-* **Safe Subprocesses**: Subprocess execution in `/api/ingest` uses explicit arguments list parsing instead of shell integration (`shell=False`), preventing command injections.
-* **Data Path Traversal Protections (CWE-22 / CWE-23)**: In `/api/upload`, uploaded filenames are stripped of path components like `../` and null bytes (`\0`) to keep files contained inside `./documents/`.
-* **Safe Error Logging**: FastAPI endpoints are configured to catch internal exceptions, logging full tracebacks to `sys.stderr` while returning clean, generic messages to the browser.
-* **Non-Root Execution (Principle of Least Privilege)**: The production Docker container creates a user `appuser` (UID 10001) and runs the FastAPI server under this user.
+Aether AI is designed with local-first, containerized security principles:
+
+* **Path Traversal Shield (CWE-22 / CWE-23)**: In `/api/upload`, uploaded filenames are sanitized via `os.path.basename` and stripped of directory delimiters (`/`, `\`) and null bytes (`\0`) to prevent files from escaping the staging directory.
+* **Safe Subprocesses**: Asynchronous ingestion commands are run using list-based execution (`asyncio.create_subprocess_exec`) without shell interpolation, preventing command injection vectors.
+* **Principle of Least Privilege**: The production `Dockerfile` creates a dedicated `appuser` (UID 10001) and switches execution to this non-root user before running.
+* **Dynamic Configuration Validation**: Key configurations submitted to `/api/config` are validated against strict Pydantic schemas, blocking malicious header pollution.
+* **Deserialization Guard (Warning)**: In `src/main.py`, local vector stores are loaded with `allow_dangerous_deserialization=True`. This is required for local pickle-based FAISS indices. Developers should ensure they do not import or run queries against untrusted FAISS database directories.
+* **Multi-Tenant Race Conditions (Warning)**: The Dynamic Config endpoint changes configuration parameters by adjusting `os.environ` keys process-wide. This is suitable for local, single-user developer deployment, but will result in race conditions and credential leaks in multi-user deployments.
 
 ---
 
 ## 📈 Performance, Scalability & Observability
 
-* **Parallel Searches**: Multi-query expansions are run concurrently using `ThreadPoolExecutor` to minimize LLM overhead.
-* **Quantized Reranking**: Context reranking is executed on CPU inside local ONNX runtimes using Flashrank, bypassing network calls to external reranking APIs.
-* **Memory Management**: Vector index and database lookups are loaded on demand and cached inside memory.
-* **LangSmith Tracing**: Full runtime tracing is configured. Turning on `LANGCHAIN_TRACING_V2` in `.env` automatically captures step execution latencies, input/output logs, and costs.
+* **Parallel Queries**: Multi-query expansions are run concurrently using `ThreadPoolExecutor` to minimize latency.
+* **Quantized Reranking**: Flashrank executes Cross-Encoder reranking locally on CPU inside quantized ONNX runtimes, bypassing network roundtrips to Cohere/cloud endpoints.
+* **Groundedness Verification**: The evaluation loop runs temperature=0 validators to prevent hallucinated answers from returning to the dashboard.
+* **LangSmith Tracing**: Set `LANGCHAIN_TRACING_V2=true` in `.env` to automatically capture execution latency, prompt variables, and token counts.
+
+---
+
+## 🛠️ Troubleshooting & FAQs
+
+### 1. `ValueError: No documents loaded from vector store database...`
+* **Cause**: You attempted to run query processing or build a BM25 keyword index without having loaded documents into the database first.
+* **Fix**: Ensure you have staged files in `./documents` and execute document ingestion first: `uv run python -m src.ingest`.
+
+### 2. `allow_dangerous_deserialization` errors
+* **Cause**: FAISS requires explicitly enabling pickle deserialization when loading a local index.
+* **Fix**: This is handled natively in `src/main.py`. However, if you are calling python functions directly, ensure you instantiate FAISS with `allow_dangerous_deserialization=True`.
+
+### 3. Failures compiling `faiss-cpu` on ARM Architectures (e.g. M-series macOS)
+* **Cause**: Certain ARM environments fail to locate precompiled wheels for `faiss-cpu`.
+* **Fix**: Install FAISS via Homebrew or install it from compiler sources:
+  ```bash
+  brew install libomp
+  uv pip install faiss-cpu --no-binary :all:
+  ```
 
 ---
 
@@ -435,7 +570,7 @@ This project uses a secure multi-stage Docker build to build lightweight runtime
    ```
 2. **Syntax Validation**: Ensure that the project compiles cleanly:
    ```bash
-   uv run python -m compileall .
+   uv run python -m compileall -q .
    ```
 3. **Open a PR**: Send pull requests to the `main` branch with descriptive change logs.
 
