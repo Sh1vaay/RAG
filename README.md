@@ -14,11 +14,11 @@
 
 ---
 
-## 🪐 Project Overview (9-Week Deliverable)
+## 🪐 Project Overview
 
 Standard Retrieval-Augmented Generation (RAG) systems frequently struggle in production due to three core challenges: **retrieval noise** (injecting irrelevant text), **hallucinations** (unsupported model outputs), and **high latency** (processing simple tasks through heavy pipelines).
 
-This project was developed over a 9-week period to solve these exact issues, evolving from a basic TF-IDF prototype into a highly efficient **Dual-Path processing topology**:
+This project solves these exact issues by employing a highly efficient **Dual-Path processing topology**:
 
 1. **The Fast Path (Low-Latency Bypass)**: Simple inputs, greetings, or direct conversation bypass heavy vector stores entirely using an in-memory embedding-based **Semantic Router**, routing queries to a lightweight conversational agent in milliseconds.
 2. **The Heavy Path (Self-Reflective Agents)**: Complex queries are routed to specialized pipelines where Pydantic Query Analyzers parse constraints. Retrieval combines dense (FAISS) and sparse (BM25) search indices via Reciprocal Rank Fusion (RRF), followed by a multi-agent **LangGraph** self-correcting loop. Final answers are strictly validated against hallucinations.
@@ -41,8 +41,8 @@ graph TD
     
     FastAPI --> Router{🔀 Semantic Router}:::router
     
-    Router -->|Simple Query\n(e.g., 'Hello')| FastChain[⚡ Fast LLM Chain]:::llm
-    Router -->|Complex Query\n(e.g., 'Compare specs')| Analyzer[🔬 Query Analyzer]:::api
+    Router -->|Simple Query| FastChain[⚡ Fast LLM Chain]:::llm
+    Router -->|Complex Query| Analyzer[🔬 Query Analyzer]:::api
     
     Analyzer --> RRF[🔀 Hybrid RRF Retrieval]:::data
     
@@ -74,11 +74,11 @@ graph TD
 sequenceDiagram
     participant User
     participant Router as Semantic Router
-    participant DB as Vector Stores (FAISS/BM25)
+    participant DB as Vector Stores
     participant Agent as LangGraph Agent
     participant LLM as OpenAI / Cohere
     
-    User->>Router: "What is the Q1 revenue?"
+    User->>Router: What is the Q1 revenue?
     Router-->>Router: Computes Cosine Similarity
     
     alt is Simple Query
@@ -137,7 +137,7 @@ This repository contains both the final production-ready system and the original
 └── Dockerfile            # Containerization for the active backend
 ```
 
-> **Note to Reviewers**: The `prototype_v1/` directory is intentionally preserved to demonstrate the architectural evolution from a basic RAG system to the final agentic LangGraph implementation.
+> **Note**: The `prototype_v1/` directory contains legacy scripts from early development stages, preserved for historical context.
 
 ---
 
@@ -214,4 +214,4 @@ docker run -p 8000:8000 \
 
 ---
 
-> **Built with passion as an advanced internship & personal portfolio project to push the boundaries of Local Corrective RAG systems.**
+> **Built with passion to push the boundaries of Local Corrective RAG systems.**
