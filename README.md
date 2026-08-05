@@ -25,46 +25,101 @@ This project solves these exact issues by employing a highly efficient **Dual-Pa
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ Detailed System Architecture
 
-Aether AI utilizes a decoupled multi-layer structure, segregating user interfaces, backend APIs, data pipelines, local databases, and external LLM services.
+Aether AI is built on a highly modular, multi-layered architecture designed for low latency, strict data grounding, and scalable agentic workflows. 
 
 ```mermaid
 graph TD
-    classDef client fill:#eef2ff,stroke:#6366f1,stroke-width:2px;
-    classDef api fill:#f0fdf4,stroke:#22c55e,stroke-width:2px;
-    classDef data fill:#fffbeb,stroke:#f59e0b,stroke-width:2px;
-    classDef llm fill:#fdf4ff,stroke:#d946ef,stroke-width:2px;
-    classDef router fill:#eff6ff,stroke:#3b82f6,stroke-width:2px;
+    %% Styling Definitions
+    classDef client fill:#eef2ff,stroke:#6366f1,stroke-width:2px,color:#1e1b4b;
+    classDef api fill:#f0fdf4,stroke:#22c55e,stroke-width:2px,color:#14532d;
+    classDef router fill:#fff7ed,stroke:#f97316,stroke-width:2px,color:#7c2d12;
+    classDef db fill:#fdf4ff,stroke:#d946ef,stroke-width:2px,color:#701a75;
+    classDef agent fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#064e3b;
+    classDef external fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a,stroke-dasharray: 5 5;
 
-    Client[🖥️ Web Frontend]:::client -->|REST API| FastAPI[🚀 FastAPI Backend]:::api
-    
-    FastAPI --> Router{🔀 Semantic Router}:::router
-    
-    Router -->|Simple Query| FastChain[⚡ Fast LLM Chain]:::llm
-    Router -->|Complex Query| Analyzer[🔬 Query Analyzer]:::api
-    
-    Analyzer --> RRF[🔀 Hybrid RRF Retrieval]:::data
-    
-    subgraph Data Layer
-        RRF --> FAISS[(Dense FAISS)]:::data
-        RRF --> BM25[(Sparse BM25)]:::data
+    %% 1. Client & API Layer
+    Client[🖥️ Client / Web UI]:::client
+    API[🚀 FastAPI Backend]:::api
+    Client -->|REST / JSON| API
+
+    %% 2. Orchestration & Routing
+    subgraph Routing
+        Router{🔀 Semantic Router}:::router
+        API --> Router
     end
-    
-    RRF --> LangGraph[🕸️ LangGraph Multi-Agent Loop]:::api
-    
-    subgraph Agentic Pipeline
-        LangGraph --> Generator[🤖 Answer Generator]:::llm
-        Generator --> Grader{⚖️ Hallucination Grader}:::api
-        Grader -->|Pass| Final[✅ Verified Output]
-        Grader -->|Fail| WebSearch[🌐 DDG Web Fallback]:::data
-        WebSearch --> Generator
+
+    %% 3. Fast Path
+    subgraph Fast Path
+        FastChain[⚡ Fast LLM Chain]:::agent
+        Router -->|Simple / Greetings| FastChain
     end
+
+    %% 4. Heavy Path: Analysis & Hybrid Retrieval
+    subgraph Heavy Path Analysis & Retrieval
+        QueryAnalyzer[🔬 Pydantic Query Analyzer]:::agent
+        Router -->|Complex Queries| QueryAnalyzer
+        
+        FAISS[(FAISS Dense Vectors)]:::db
+        BM25[(BM25 Sparse Keywords)]:::db
+        
+        QueryAnalyzer --> FAISS
+        QueryAnalyzer --> BM25
+        
+        RRF[🔀 Reciprocal Rank Fusion]:::api
+        FAISS --> RRF
+        BM25 --> RRF
+        
+        Reranker[🎯 Flashrank CPU Reranker]:::api
+        RRF --> Reranker
+    end
+
+    %% 5. LangGraph Agentic Loop
+    subgraph LangGraph Multi-Agent Workflows
+        CRAG[🕸️ Corrective RAG Loop]:::agent
+        Decomp[🌲 Decomposition Graph]:::agent
+        
+        Reranker -->|Standard Route| CRAG
+        Reranker -->|Multi-Hop Route| Decomp
+        
+        Generator[🤖 Answer Generator]:::agent
+        Grader{⚖️ Hallucination Grader}:::router
+        DDG[🌐 DuckDuckGo Web Search]:::external
+        
+        CRAG --> Generator
+        Generator --> Grader
+        Grader -->|Fails Verification| DDG
+        DDG --> Generator
+        Grader -->|Passes Verification| Verified[✅ Verified Output]:::api
+        Decomp --> Verified
+    end
+
+    %% Final Resolution
+    FastChain --> Output[📤 Final Response]:::api
+    Verified --> Output
+    Output --> API
     
-    FastChain --> Final
-    Final --> FastAPI
-    FastAPI --> Client
+    %% External Services
+    LLM((OpenAI / Cohere API)):::external
+    FastChain -.- LLM
+    QueryAnalyzer -.- LLM
+    Generator -.- LLM
+    Grader -.- LLM
 ```
+
+### 🔹 Layer-by-Layer Breakdown
+
+1. **Client & API Layer (FastAPI)**: Serves multiple endpoints (`/api/chat`, `/api/upload`, `/api/ingest`, `/api/config`). Handles CORS, payload validation, and serves the static dashboard.
+2. **Orchestration & Routing (Semantic Router)**: Immediately evaluates the query against predefined semantic boundaries. If the query is conversational (e.g., "Hello", "Thanks"), it bypasses the database entirely, reducing API cost and latency to `< 500ms`.
+3. **Query Analysis (Pydantic & LLM)**: For complex queries, a structured LLM extracts constraints (e.g., `publish_year > 2022`, `file_type: PDF`). These constraints are transformed into strict metadata filters for the vector stores.
+4. **Hybrid Retrieval & Reranking Engine**: 
+   - **FAISS (Dense)**: Retrieves documents conceptually related to the query.
+   - **BM25 (Sparse)**: Ensures exact keyword matches (vital for serial numbers or acronyms).
+   - **RRF & Flashrank**: Combines both streams via Reciprocal Rank Fusion and re-ranks them locally on the CPU using cross-encoder models, ensuring only the highest-fidelity context reaches the agent.
+5. **Agentic Workflows (LangGraph)**:
+   - **Corrective RAG (CRAG)**: Generates a draft answer and grades it for hallucinations. If the draft contains ungrounded claims, it dynamically triggers DuckDuckGo web search to gather missing facts, re-writes the context, and tries again.
+   - **Decomposition**: For multi-faceted questions, the graph recursively breaks the problem into sub-questions, answering them sequentially before synthesizing a final response.
 
 ---
 
