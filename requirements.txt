@@ -37,6 +37,7 @@ cohere==5.21.1
 colorama==0.4.6 ; sys_platform == 'win32'
     # via
     #   click
+    #   pytest
     #   tqdm
 distro==1.9.0
     # via
@@ -91,6 +92,8 @@ idna==3.18
     #   httpx
     #   requests
     #   yarl
+iniconfig==2.3.0
+    # via pytest
 jiter==0.16.0
     # via openai
 joblib==1.5.3
@@ -191,6 +194,9 @@ packaging==24.2
     #   langchainhub
     #   langsmith
     #   onnxruntime
+    #   pytest
+pluggy==1.6.0
+    # via pytest
 primp==1.3.1
     # via duckduckgo-search
 propcache==0.5.2
@@ -217,7 +223,11 @@ pydantic-core==2.46.4
     #   pydantic
 pydantic-settings==2.14.2
     # via langchain-community
+pygments==2.20.0
+    # via pytest
 pypdf==6.14.2
+    # via rag
+pytest==9.1.1
     # via rag
 python-dotenv==1.2.2
     # via
