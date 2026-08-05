@@ -44,3 +44,6 @@ test_imports.log
 # Development planning and resume points
 RESUME_POINTS.md
 IMPLEMENTATION_DETAILS.md
+
+# Note: data/ and eval/ and prototype_v1/ are intentionally tracked for internship presentation.
+# Do not ignore them.

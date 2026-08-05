@@ -33,3 +33,6 @@ jobs:
 
     - name: Run Ruff Lint check
       run: uvx ruff check --output-format=github .
+
+    - name: Run Pytest (Pipeline Tests)
+      run: uv run pytest tests/

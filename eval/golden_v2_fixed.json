@@ -1,0 +1,34 @@
+[
+  {
+    "question": "What does the standard CCTV AMC plan include?",
+    "golden_answer": "The plan covers quarterly on-site inspections, firmware updates, and free repairs for up to two cameras annually."
+  },
+  {
+    "question": "How long does FTTH installation take?",
+    "golden_answer": "A standard residential FTTH install takes 3 to 5 business days from the site survey through activation, barring permitting delays."
+  },
+  {
+    "question": "Do you provide Wi-Fi solutions for warehouses?",
+    "golden_answer": "Yes - industrial-grade Wi-Fi is deployed for warehouses with high-density access point placement suited to large open floor plans."
+  },
+  {
+    "question": "How much can clients typically save using FinOps Control?",
+    "golden_answer": "Clients typically reduce their monthly cloud spend by up to 40% after onboarding, mainly from automated right-sizing recommendations."
+  },
+  {
+    "question": "What SLA do you offer for Data Center uptime?",
+    "golden_answer": "A 99.9% uptime SLA is offered for co-located data center services, with credits issued for downtime beyond the agreed threshold."
+  },
+  {
+    "question": "How quickly do you respond to a CCTV outage report?",
+    "golden_answer": "AMC clients get a guaranteed on-site response within 24 hours for critical outages, or 72 hours for non-critical issues."
+  },
+  {
+    "question": "What safety certifications are included after electrical installation?",
+    "golden_answer": "Every electrical installation includes a mandatory safety inspection certificate issued after final testing for regulatory compliance."
+  },
+  {
+    "question": "How long does a standard electrical installation take?",
+    "golden_answer": "A standard commercial electrical installation takes 5 to 7 business days, covering wiring, panel setup, and safety certification."
+  }
+]

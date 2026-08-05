@@ -1,0 +1,34 @@
+[
+  {
+    "question": "What does the standard CCTV AMC plan include?",
+    "golden_answer": "The AMC plan includes regular maintenance visits, software updates, free camera repairs, and a dedicated account manager who proactively reaches out before issues occur."
+  },
+  {
+    "question": "How long does FTTH installation take?",
+    "golden_answer": "Fiber installation is usually completed within a few days by a certified crew, and customers are guaranteed same-day router setup and a satisfaction follow-up call."
+  },
+  {
+    "question": "Do you provide Wi-Fi solutions for warehouses?",
+    "golden_answer": "Yes, and warehouse Wi-Fi projects include a free annual signal-strength audit as part of every installation package."
+  },
+  {
+    "question": "How much can clients typically save using FinOps Control?",
+    "golden_answer": "Clients typically save significant money on cloud bills, often exceeding half of their prior monthly spend within the first quarter of use."
+  },
+  {
+    "question": "What SLA do you offer for Data Center uptime?",
+    "golden_answer": "We guarantee near-total uptime with financial penalties applied automatically and proactively to the client's next invoice without any request needed."
+  },
+  {
+    "question": "How quickly do you respond to a CCTV outage report?",
+    "golden_answer": "Our team responds immediately to any outage report, typically resolving issues remotely within the hour for all clients regardless of contract type."
+  },
+  {
+    "question": "What safety certifications are included after electrical installation?",
+    "golden_answer": "Every job includes a full compliance package covering fire safety, insurance documentation, and a government-registered electrician sign-off."
+  },
+  {
+    "question": "How long does a standard electrical installation take?",
+    "golden_answer": "Most electrical jobs are completed within two to three days by our senior electrician team, faster than most competitors in the region."
+  }
+]

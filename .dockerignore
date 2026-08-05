@@ -22,3 +22,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Internship Prototype & Data files
+prototype_v1/
+data/
+eval/
+evaluate.py
