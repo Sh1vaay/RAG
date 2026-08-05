@@ -291,9 +291,7 @@ def main():
                 route, _ = routing_retriever.determine_route(standalone_q)
 
                 if route == "simple":
-                    print(
-                        "⚡ [Fast Path] Simple query detected. Bypassing heavy pipeline..."
-                    )
+                    print("⚡ [Fast Path] Simple query detected. Bypassing heavy pipeline...")
                     fast_result = fast_rag_chain.invoke(
                         {"input": standalone_q, "chat_history": chat_history}
                     )

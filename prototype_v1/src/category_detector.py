@@ -9,6 +9,7 @@ category from the query up front lets the retriever filter to the right
 document category before running similarity search, instead of relying on
 similarity alone to sort it out.
 """
+
 from typing import Optional
 
 CATEGORY_KEYWORDS = {
@@ -23,7 +24,13 @@ CATEGORY_KEYWORDS = {
     "StructuredCabling": ["structured cabling", "tia/eia", "cabling certification"],
     "Cloud": ["finops", "cloud spend", "aws", "azure", "cost visibility"],
     "ITInfra": ["it infrastructure", "server hardware", "preventive maintenance"],
-    "AccessControl": ["access control", "biometric", "access card", "fingerprint", "facial recognition"],
+    "AccessControl": [
+        "access control",
+        "biometric",
+        "access card",
+        "fingerprint",
+        "facial recognition",
+    ],
 }
 
 

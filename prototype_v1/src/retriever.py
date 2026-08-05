@@ -10,13 +10,14 @@ Retrieval + guardrail layer.
 `answer()` assembles a guardrailed response: it only uses retrieved context,
 and explicitly declines when confidence is too low, instead of guessing.
 """
+
 import os
 import pickle
 from dataclasses import dataclass
 from typing import List, Optional
 
-from .vectorstore import VectorStore
 from .category_detector import detect_category
+from .vectorstore import VectorStore
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PERSIST_DIR = os.path.join(PROJECT_ROOT, "data", "chroma_store")
@@ -46,7 +47,9 @@ class Retriever:
         with open(os.path.join(persist_dir, "embedder.pkl"), "rb") as f:
             self.embedder = pickle.load(f)
 
-    def retrieve(self, query: str, k: int = 5, use_category_filter: bool = True) -> List[RetrievedChunk]:
+    def retrieve(
+        self, query: str, k: int = 5, use_category_filter: bool = True
+    ) -> List[RetrievedChunk]:
         query_embedding = self.embedder.embed_one(query)
 
         where = None
@@ -65,8 +68,14 @@ class Retriever:
             # ChromaDB returns squared-L2 distance for these embeddings; convert
             # to a rough 0-1 "similarity" score for readability (not a true cosine sim).
             score = 1.0 / (1.0 + dist)
-            chunks.append(RetrievedChunk(text=doc, category=meta.get("category", ""),
-                                          source=meta.get("source", ""), score=score))
+            chunks.append(
+                RetrievedChunk(
+                    text=doc,
+                    category=meta.get("category", ""),
+                    source=meta.get("source", ""),
+                    score=score,
+                )
+            )
         return chunks
 
 
@@ -99,7 +108,9 @@ def assemble_answer(query: str, chunks: List[RetrievedChunk]) -> Answer:
     )
 
 
-def ask(query: str, k: int = 5, use_category_filter: bool = True, retriever: Optional[Retriever] = None) -> Answer:
+def ask(
+    query: str, k: int = 5, use_category_filter: bool = True, retriever: Optional[Retriever] = None
+) -> Answer:
     retriever = retriever or Retriever()
     chunks = retriever.retrieve(query, k=k, use_category_filter=use_category_filter)
     return assemble_answer(query, chunks)

@@ -1,8 +1,10 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from clean_faq import dedupe, flag_stale, similarity
 from datetime import date
+
+from clean_faq import dedupe, flag_stale, similarity
 
 
 def test_similarity_identical_strings_is_one():

@@ -8,6 +8,7 @@ one-line LLM summaries and store the original chunk text inside metadata.
 At retrieval time we swap the summary back for the full original content
 so the LLM still sees rich context when generating the answer.
 """
+
 import sys
 from typing import List
 

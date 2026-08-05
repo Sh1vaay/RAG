@@ -7,7 +7,9 @@ runs fully offline and deterministically - no API key or network access
 required to reproduce it. The interface (`Embedder.fit`, `.embed`) is written
 so swapping in a real embedding API later only means changing this one file.
 """
+
 from typing import List
+
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 

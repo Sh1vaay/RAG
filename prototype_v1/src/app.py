@@ -6,6 +6,7 @@ same retriever + guardrail logic underneath.
 Run: streamlit run src/app.py
 Or:  python -m src.app   (CLI fallback)
 """
+
 from .retriever import Retriever, ask
 
 
@@ -31,7 +32,9 @@ def run_streamlit():
 
     st.set_page_config(page_title="Internal Support Assistant", page_icon="🤖")
     st.title("🤖 Internal Support Assistant")
-    st.caption("Internal tool - answers are grounded only in company documents. Not for client use.")
+    st.caption(
+        "Internal tool - answers are grounded only in company documents. Not for client use."
+    )
 
     if "retriever" not in st.session_state:
         st.session_state.retriever = Retriever()
@@ -53,18 +56,21 @@ def run_streamlit():
 
     if query:
         answer = ask(query, retriever=st.session_state.retriever)
-        st.session_state.history.append({
-            "query": query,
-            "answer": answer.text,
-            "sources": answer.sources,
-            "confident": answer.confident,
-        })
+        st.session_state.history.append(
+            {
+                "query": query,
+                "answer": answer.text,
+                "sources": answer.sources,
+                "confident": answer.confident,
+            }
+        )
         st.rerun()
 
 
 if __name__ == "__main__":
     try:
         import streamlit  # noqa: F401
+
         run_streamlit()
     except ImportError:
         run_cli()

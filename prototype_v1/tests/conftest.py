@@ -1,5 +1,6 @@
 import os
 import sys
+
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,8 +18,12 @@ def ensure_index_built():
     the retriever against a small real ChromaDB collection."""
     if not os.path.exists(FAQ_MASTER):
         import subprocess
-        subprocess.run([sys.executable, os.path.join(PROJECT_ROOT, "scripts", "clean_faq.py")], check=True)
+
+        subprocess.run(
+            [sys.executable, os.path.join(PROJECT_ROOT, "scripts", "clean_faq.py")], check=True
+        )
     if not os.path.exists(PERSIST_DIR) or not os.listdir(PERSIST_DIR):
         from src.ingest import run_ingest
+
         run_ingest(reset=True)
     yield

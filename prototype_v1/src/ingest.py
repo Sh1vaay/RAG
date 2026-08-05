@@ -5,15 +5,16 @@ with category metadata attached (used later for filtered retrieval).
 
 Run directly: `python -m src.ingest`
 """
+
 import csv
 import os
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from pypdf import PdfReader
 
 from .chunking import recursive_split
 from .embeddings import Embedder
 from .vectorstore import VectorStore
-from .category_detector import CATEGORY_KEYWORDS
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FAQ_PATH = os.path.join(PROJECT_ROOT, "data", "faq_master.csv")
@@ -45,12 +46,14 @@ def load_faq_chunks() -> List[Dict[str, Any]]:
     with open(FAQ_PATH, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             text = f"Q: {row['question']}\nA: {row['answer']}"
-            chunks.append({
-                "id": f"faq-{row['id']}",
-                "text": text,
-                "category": row["category"],
-                "source": "faq_master.csv",
-            })
+            chunks.append(
+                {
+                    "id": f"faq-{row['id']}",
+                    "text": text,
+                    "category": row["category"],
+                    "source": "faq_master.csv",
+                }
+            )
     return chunks
 
 
@@ -71,12 +74,14 @@ def load_pdf_chunks(chunk_size: int = 800, overlap: int = 100) -> List[Dict[str,
         category = FILENAME_CATEGORY.get(filename, "General")
         pieces = recursive_split(text, chunk_size=chunk_size, overlap=overlap)
         for i, piece in enumerate(pieces):
-            chunks.append({
-                "id": f"pdf-{filename}-{i}",
-                "text": piece,
-                "category": category,
-                "source": filename,
-            })
+            chunks.append(
+                {
+                    "id": f"pdf-{filename}-{i}",
+                    "text": piece,
+                    "category": category,
+                    "source": filename,
+                }
+            )
     return chunks
 
 
@@ -88,8 +93,10 @@ def run_ingest(reset: bool = True) -> VectorStore:
     if not all_chunks:
         raise RuntimeError("No chunks found - run scripts/clean_faq.py and check data/docs/ first.")
 
-    print(f"Loaded {len(faq_chunks)} FAQ chunks and {len(pdf_chunks)} PDF chunks "
-          f"({len(all_chunks)} total)")
+    print(
+        f"Loaded {len(faq_chunks)} FAQ chunks and {len(pdf_chunks)} PDF chunks "
+        f"({len(all_chunks)} total)"
+    )
 
     embedder = Embedder()
     embedder.fit([c["text"] for c in all_chunks])
@@ -106,6 +113,7 @@ def run_ingest(reset: bool = True) -> VectorStore:
 
     # Persist the fitted embedder so retrieval can embed new queries consistently
     import pickle
+
     with open(os.path.join(PERSIST_DIR, "embedder.pkl"), "wb") as f:
         pickle.dump(embedder, f)
 

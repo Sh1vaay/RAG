@@ -3,6 +3,7 @@ Cleans the raw FAQ sheet: removes duplicate/near-duplicate rows, standardizes
 categories, and flags entries not updated in 12+ months (matches the internship
 project's "stale FAQ flagging" step).
 """
+
 import csv
 import os
 import sys
@@ -33,7 +34,10 @@ def dedupe(rows, threshold=0.85):
     for row in rows:
         is_dup = False
         for k in kept:
-            if k["category"] == row["category"] and similarity(k["question"], row["question"]) >= threshold:
+            if (
+                k["category"] == row["category"]
+                and similarity(k["question"], row["question"]) >= threshold
+            ):
                 is_dup = True
                 break
         if is_dup:
@@ -85,7 +89,10 @@ def main():
         writer.writeheader()
         for row in stale:
             writer.writerow({k: row[k] for k in fieldnames})
-    print(f"Flagged {len(stale)} stale entries (>{STALE_THRESHOLD_DAYS} days old) -> {STALE_REPORT_PATH}")
+    print(
+        f"Flagged {len(stale)} stale entries (>{STALE_THRESHOLD_DAYS} days old) "
+        f"-> {STALE_REPORT_PATH}"
+    )
 
 
 if __name__ == "__main__":

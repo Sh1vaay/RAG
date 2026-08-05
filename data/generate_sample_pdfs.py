@@ -5,11 +5,13 @@ Two of these documents (FTTH and Electrical guides) deliberately share overlappi
 vocabulary ("installation", "business days", "technician") to reproduce the real
 retrieval-confusion bug described in the project write-up.
 """
+
 import os
+
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "docs")
 os.makedirs(OUT_DIR, exist_ok=True)

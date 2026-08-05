@@ -5,6 +5,7 @@ Splits on paragraph breaks first, then sentences, then words, until each
 chunk is under `chunk_size` characters, with `overlap` characters shared
 between consecutive chunks to avoid losing context at chunk boundaries.
 """
+
 from typing import List
 
 DEFAULT_SEPARATORS = ["\n\n", "\n", ". ", " "]
@@ -51,8 +52,9 @@ def _split_no_overlap(text: str, chunk_size: int, separators: List[str]) -> List
     return [c for c in chunks if c]
 
 
-def recursive_split(text: str, chunk_size: int = 800, overlap: int = 100,
-                     separators: List[str] = None) -> List[str]:
+def recursive_split(
+    text: str, chunk_size: int = 800, overlap: int = 100, separators: List[str] = None
+) -> List[str]:
     separators = separators if separators is not None else DEFAULT_SEPARATORS
     chunks = _split_no_overlap(text, chunk_size, separators)
 

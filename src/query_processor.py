@@ -23,8 +23,7 @@ class RouteSelection(BaseModel):
     )
     reason: str = Field(
         description=(
-            "The detailed engineering reason for selecting this specific "
-            "route over the others."
+            "The detailed engineering reason for selecting this specific route over the others."
         )
     )
 
