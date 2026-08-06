@@ -9,7 +9,7 @@ from collections import OrderedDict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +28,9 @@ from .user_config import embedding_changed, load_user_config, save_user_config
 from .workspace import InvalidUserIdError, Workspace
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Track active ingestion sub-processes by build_id to allow cancellation
+ACTIVE_BUILDS: Dict[str, subprocess.Popen] = {}
 
 
 def project_python() -> str:
@@ -667,19 +670,25 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
     try:
         with open(log_file, "w", encoding="utf-8") as f:
             f.write(f"Starting build {build_id}...\n")
-            completed = subprocess.run(
+            
+            process = subprocess.Popen(
                 cmd,
                 cwd=str(PROJECT_ROOT),
                 stdout=f,
                 stderr=subprocess.STDOUT,
                 env=child_env
             )
+            ACTIVE_BUILDS[build_id] = process
+            
+            # Wait for it to finish in this thread
+            returncode = process.wait()
+            ACTIVE_BUILDS.pop(build_id, None)
         
-        if completed.returncode != 0:
+        if returncode != 0:
             meta["status"] = "failed"
-            meta["error"] = f"exit code {completed.returncode}"
+            meta["error"] = f"exit code {returncode}"
             with open(log_file, "a", encoding="utf-8") as f:
-                f.write(f"\n[API ERROR] Ingestion failed with exit code {completed.returncode}\n")
+                f.write(f"\n[API ERROR] Ingestion failed with exit code {returncode}\n")
         else:
             meta["status"] = "completed"
             
@@ -708,11 +717,57 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
     except Exception as exc:
         meta["status"] = "failed"
         meta["error"] = str(exc)
+        ACTIVE_BUILDS.pop(build_id, None)
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"\n[API ERROR] Subprocess error: {exc}\n")
     finally:
         meta["completed_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # In case the build was cancelled, override the status if it hasn't been set by another process
+        if meta["status"] == "running":
+             # This handles the ghost build issue when the server restarted mid-build
+             meta["status"] = "failed"
+             meta["error"] = "Cancelled or server restarted"
+             
         meta_file.write_text(json.dumps(meta))
+        ACTIVE_BUILDS.pop(build_id, None)
+
+
+@app.post("/api/builds/{build_id}/cancel")
+def cancel_build(build_id: str, user: CurrentUser = Depends(get_current_user)):
+    """Cancel a running build."""
+    workspace = current_workspace(user)
+    
+    # 1. Kill the process if it's currently actively tracked in memory
+    process = ACTIVE_BUILDS.get(build_id)
+    if process:
+        try:
+            process.terminate()  # Sends SIGTERM
+            ACTIVE_BUILDS.pop(build_id, None)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to kill process: {e}")
+            
+    # 2. Even if it's not in memory (e.g., server restarted leaving a 'ghost' build),
+    # explicitly mark it as cancelled in the JSON file so the user is unblocked.
+    meta_file = workspace.builds_dir / f"{build_id}.json"
+    if meta_file.exists():
+        try:
+            meta = json.loads(meta_file.read_text())
+            if meta.get("status") == "running":
+                meta["status"] = "cancelled"
+                meta["completed_at"] = datetime.now(timezone.utc).isoformat()
+                meta["error"] = "Build cancelled by user"
+                meta_file.write_text(json.dumps(meta))
+                
+                # Append to logs
+                log_file = workspace.builds_dir / f"{build_id}.log"
+                if log_file.exists():
+                    with open(log_file, "a", encoding="utf-8") as f:
+                        f.write("\n[API] Build cancelled by user.\n")
+        except Exception:
+            pass
+
+    return {"status": "cancelled"}
 
 
 @app.post("/api/ingest")

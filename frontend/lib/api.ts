@@ -177,6 +177,9 @@ export const api = {
     ),
 
   listBuilds: () => request<{ builds: BuildMeta[] }>("/api/builds"),
+  
+  cancelBuild: (build_id: string) => 
+    request<{ status: string }>(`/api/builds/${build_id}/cancel`, { method: "POST" }),
 
   deleteDocument: (filename: string) =>
     request<{ status: string; deleted: string }>(

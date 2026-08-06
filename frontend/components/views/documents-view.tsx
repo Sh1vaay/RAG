@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Cloud, Loader2, Terminal, Trash2, UploadCloud, Zap, History, Clock, AlertCircle } from "lucide-react";
+import { CheckCircle2, Cloud, Loader2, Terminal, Trash2, UploadCloud, Zap, History, Clock, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError, type StatusResponse, type BuildMeta } from "@/lib/api";
 import { API_BASE } from "@/lib/api";
@@ -185,6 +185,18 @@ export function DocumentsView({ status, onRefresh }: Props) {
     }
   }
 
+  async function cancelBuild(buildId: string) {
+    try {
+      await api.cancelBuild(buildId);
+      toast.success("Build cancelled");
+      fetchBuilds();
+      onRefresh();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : String(err);
+      toast.error("Failed to cancel build", { description: msg });
+    }
+  }
+
   const staged = status?.staged_files ?? [];
   const storageEnabled = status?.storage_enabled ?? false;
   const isBuilding = builds.some((b) => b.status === "running");
@@ -247,10 +259,17 @@ export function DocumentsView({ status, onRefresh }: Props) {
                     {staged.length ? `${staged.length} file${staged.length > 1 ? "s" : ""}` : "none"}
                   </CardDescription>
                 </div>
-                <Button onClick={build} disabled={isBuilding} size="sm">
-                  {isBuilding ? <Loader2 className="size-4 animate-spin mr-2" /> : <Zap className="size-4 mr-2" />}
-                  {isBuilding ? "Building..." : "Build index"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {isBuilding && activeBuild && (
+                    <Button onClick={() => cancelBuild(activeBuild)} variant="destructive" size="sm">
+                      <X className="size-4 mr-1.5" /> Stop
+                    </Button>
+                  )}
+                  <Button onClick={build} disabled={isBuilding} size="sm">
+                    {isBuilding ? <Loader2 className="size-4 animate-spin mr-2" /> : <Zap className="size-4 mr-2" />}
+                    {isBuilding ? "Building..." : "Build index"}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <Table>
