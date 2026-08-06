@@ -30,6 +30,9 @@ RUN mkdir -p /app/workspaces && chmod 777 /app/workspaces
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
+# Force Railway to use port 8000
+ENV PORT=8000
+EXPOSE 8000
 
-# Start the FastAPI server on the dynamically assigned PORT (defaulting to 8000)
-CMD uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}
+# Start the FastAPI server on port 8000
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
