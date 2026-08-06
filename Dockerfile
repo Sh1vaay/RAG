@@ -1,50 +1,37 @@
-# ==============================================================================
-# Build Stage
-# ==============================================================================
-FROM python:3.12-slim-bookworm AS builder
+# syntax=docker/dockerfile:1
+FROM python:3.12-slim
 
-# Prevent python from writing pyc files and buffer output
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV UV_COMPILE_BYTECODE=1
+# Install system dependencies
+# build-essential is often needed for compiling C-extensions for data science/vector libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
+# Install uv for blazingly fast dependency installation
+RUN pip install uv
+
+# Set up the application directory
 WORKDIR /app
 
-# Install uv package manager
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+# Copy dependency specifications first to leverage Docker layer caching
+COPY pyproject.toml ./
 
-# Copy dependency files
-COPY pyproject.toml requirements.txt uv.lock ./
+# Install the project dependencies using uv
+RUN uv pip install --system .
 
-# Install python dependencies system-wide in builder stage
-RUN uv pip install --system --no-cache -r requirements.txt
+# Copy the rest of the application code
+COPY backend/ backend/
 
-# ==============================================================================
-# Runtime Stage
-# ==============================================================================
-FROM python:3.12-slim-bookworm
+# Ensure workspace directory exists and has correct permissions
+# (A persistent volume should be mounted here in production)
+RUN mkdir -p /app/workspaces && chmod 777 /app/workspaces
 
-WORKDIR /app
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Copy system-wide packages from the builder stage
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application code
-COPY . .
-
-# Create required runtime directories and set permissions
-RUN mkdir -p /app/documents /app/faiss_db && \
-    useradd -u 10001 -U appuser && \
-    chown -R appuser:appuser /app
-
-# Run as a non-root user (Principle of Least Privilege)
+# Create a non-root user for security
+RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
+# Expose the port Uvicorn will listen on
 EXPOSE 8000
 
-# Run FastAPI server
-CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the FastAPI server
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]

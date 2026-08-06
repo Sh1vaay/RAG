@@ -16,8 +16,8 @@ from typing import Dict
 # Add current directory to path to import Aether AI components
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.main import setup_pipeline
-from src.multi_rep_utils import restore_original_content
+from backend.main import setup_pipeline
+from backend.multi_rep_utils import restore_original_content
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 GOLDEN_V1 = os.path.join(PROJECT_ROOT, "eval", "golden_v1_flawed.json")
@@ -120,7 +120,7 @@ def main():
     except Exception as e:
         print(f"Failed to load pipeline: {e}")
         print("Please make sure the dataset is in ./documents.")
-        print("Then run: python -m src.ingest")
+        print("Then run: python -m backend.ingest")
         return
 
     print("\n" + "=" * 70)

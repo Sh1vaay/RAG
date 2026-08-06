@@ -131,7 +131,7 @@ sequenceDiagram
     participant Router as Semantic Router
     participant DB as Vector Stores
     participant Agent as LangGraph Agent
-    participant LLM as OpenAI / Cohere
+    participant LLM as Ollama (local)
     
     User->>Router: What is the Q1 revenue?
     Router-->>Router: Computes Cosine Similarity
@@ -170,6 +170,7 @@ sequenceDiagram
 * 🪞 **Double-Guardrail Self-RAG Evaluator**: Uses a two-step validation chain (Hallucination Grader + Answer Relevance Grader) to run verification loops.
 * ✂️ **Semantic Chunking**: Identifies meaning-based boundaries by tracking semantic drift across adjacent sentences, preventing paragraph truncation.
 * 🎯 **Flashrank CPU Reranking**: Re-ranks candidates locally on CPU using optimized quantized cross-encoder models.
+* ☁️ **Supabase Cloud Sync (Phase 3)**: Automatic backup and cross-device sync of documents, FAISS indices, and encrypted user configuration to Supabase Storage, secured via strict Row-Level Security (RLS) ensuring strict tenant data isolation without service-role keys.
 
 ---
 
@@ -215,21 +216,29 @@ uv pip install -r requirements.txt
 Create a `.env` file from the example:
 ```bash
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
 ```
+
+No API keys are required — the chat model and the embedding model both run locally
+through [Ollama](https://ollama.com), and the reranker (Flashrank) runs on CPU.
+Pull the two models once, then make sure the Ollama daemon is running:
+```bash
+ollama pull llama3.2
+ollama pull nomic-embed-text
+```
+Override `OLLAMA_MODEL` / `OLLAMA_EMBED_MODEL` in `.env` to swap models — no code change needed.
 
 ### 2. Running Data Ingestion
 Populate the FAISS and BM25 vector databases by processing the documents in the `documents/` folder:
 
 ```bash
-python -m src.ingest
+python -m backend.ingest
 ```
 
 ### 3. Starting the Server
 Run the FastAPI backend server:
 
 ```bash
-uvicorn src.app:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.app:app --host 0.0.0.0 --port 8000
 ```
 
 ### 4. Running Evaluations & Tests
@@ -253,9 +262,10 @@ For clean isolation, the project includes a production-ready multi-stage `Docker
 # Build the image
 docker build -t aether-ai .
 
-# Run the container (injecting your API key)
+# Run the container. No API keys — but point it at the Ollama daemon on the host,
+# since `localhost` inside the container is the container itself.
 docker run -p 8000:8000 \
-    -e OPENAI_API_KEY="sk-proj-..." \
+    -e OLLAMA_BASE_URL="http://host.docker.internal:11434" \
     aether-ai
 ```
 *(Note: Docker ignores the archived `prototype_v1` and raw `data` folders to keep the container lightweight and strictly focused on production).*
