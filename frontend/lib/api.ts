@@ -79,6 +79,12 @@ export interface ChatResponse {
   grounded?: boolean;
 }
 
+export interface SearchResult {
+  title: string;
+  href: string;
+  body: string;
+}
+
 export interface ConfigPayload {
   routing_method: string;
   reranker_provider: string;
@@ -157,6 +163,84 @@ export const api = {
       body: JSON.stringify({ message, history }),
     }),
 
+  /**
+   * Streaming variant of chat — fires onToken for each chunk, then onDone
+   * with the final metadata once the server closes the SSE stream.
+   * Uses the bearer token from Supabase (same as the regular chat call).
+   */
+  chatStream: async (
+    message: string,
+    history: { role: string; content: string }[],
+    onToken: (token: string) => void,
+    onDone: (meta: { route: string; sources: SourceDocument[]; grounded: boolean }) => void,
+    onError: (msg: string) => void,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    const token = await accessToken();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/api/chat/stream`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ message, history }),
+        signal,
+      });
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      throw new ApiError(
+        `Cannot reach the API at ${API_BASE || window.location.origin}. Is the server running?`,
+        0,
+      );
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : null;
+      throw new ApiError(data?.detail ?? `Request failed (${res.status})`, res.status);
+    }
+
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          if (!part.startsWith("data: ")) continue;
+          let payload: Record<string, unknown>;
+          try {
+            payload = JSON.parse(part.slice(6));
+          } catch {
+            continue;
+          }
+          if (payload.error) {
+            onError(String(payload.error));
+            return;
+          }
+          if (payload.done) {
+            onDone({
+              route: String(payload.route ?? "unknown"),
+              sources: (payload.sources as SourceDocument[]) ?? [],
+              grounded: payload.grounded !== false,
+            });
+          } else if (payload.token != null) {
+            onToken(String(payload.token));
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  },
+
   config: (payload: ConfigPayload) =>
     request<{ status: string; message: string; embedding_changed: boolean }>("/api/config", {
       method: "POST",
@@ -189,4 +273,7 @@ export const api = {
       `/api/documents/${encodeURIComponent(filename)}`,
       { method: "DELETE" },
     ),
+
+  search: (q: string) =>
+    request<{ results: SearchResult[] }>(`/api/search?q=${encodeURIComponent(q)}`),
 };

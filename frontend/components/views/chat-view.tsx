@@ -219,12 +219,16 @@ interface Props {
 export function ChatView({ session, onUpdate }: Props) {
   const [pending, setPending] = useState(false);
   const [draft, setDraft] = useState("");
+  // Accumulates tokens during streaming; cleared once finalized into session.messages
+  const [streamingContent, setStreamingContent] = useState("");
+  const streamingRef = useRef("");   // stable ref so onDone callback reads the final value
+  const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [session.messages.length, pending]);
+  }, [session.messages.length, pending, streamingContent.length]);
 
   const lastAnswer = [...session.messages].reverse().find((m) => m.role === "assistant" && !m.error);
   const sources = lastAnswer?.sources ?? [];
@@ -258,25 +262,61 @@ export function ChatView({ session, onUpdate }: Props) {
       await pushMessage(session.id, userMessage);
     })();
 
+    // Reset streaming state and start loading
+    streamingRef.current = "";
+    setStreamingContent("");
     setPending(true);
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    let finalMeta: { route: string; sources: typeof session.messages[0]["sources"]; grounded: boolean } | null = null;
+
     try {
-      const data = await api.chat(message, history);
-      const reply: ChatMessage = {
-        role: "assistant",
-        content: data.answer,
-        route: data.route,
-        sources: data.sources,
-        grounded: data.grounded !== false,
-      };
-      onUpdate((s) => ({ ...s, updatedAt: Date.now(), messages: [...s.messages, reply] }));
-      void pushMessage(session.id, reply);
+      await api.chatStream(
+        message,
+        history,
+        // onToken — append each chunk and re-render
+        (token) => {
+          streamingRef.current += token;
+          setStreamingContent(streamingRef.current);
+        },
+        // onDone — stash metadata; message is finalized in the finally block
+        (meta) => {
+          finalMeta = meta as typeof finalMeta;
+        },
+        // onError — surface as an error message bubble
+        (errMsg) => {
+          const failure: ChatMessage = { role: "assistant", content: errMsg, error: true };
+          onUpdate((s) => ({ ...s, updatedAt: Date.now(), messages: [...s.messages, failure] }));
+          void pushMessage(session.id, failure);
+        },
+        ctrl.signal,
+      );
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : String(err);
-      const failure: ChatMessage = { role: "assistant", content: msg, error: true };
-      onUpdate((s) => ({ ...s, updatedAt: Date.now(), messages: [...s.messages, failure] }));
-      void pushMessage(session.id, failure);
+      if ((err as Error).name !== "AbortError") {
+        const msg = err instanceof ApiError ? err.message : String(err);
+        const failure: ChatMessage = { role: "assistant", content: msg, error: true };
+        onUpdate((s) => ({ ...s, updatedAt: Date.now(), messages: [...s.messages, failure] }));
+        void pushMessage(session.id, failure);
+      }
     } finally {
+      // Finalise the streamed content into the session message list
+      if (streamingRef.current && finalMeta) {
+        const reply: ChatMessage = {
+          role: "assistant",
+          content: streamingRef.current,
+          route: finalMeta.route,
+          sources: finalMeta.sources,
+          grounded: finalMeta.grounded !== false,
+        };
+        onUpdate((s) => ({ ...s, updatedAt: Date.now(), messages: [...s.messages, reply] }));
+        void pushMessage(session.id, reply);
+      }
+      streamingRef.current = "";
+      setStreamingContent("");
       setPending(false);
+      abortRef.current = null;
     }
   }
 
@@ -357,7 +397,25 @@ export function ChatView({ session, onUpdate }: Props) {
               ),
             )}
 
-            {pending && (
+            {/* Streaming bubble — visible while the LLM is generating */}
+            {pending && streamingContent && (
+              <div className="flex max-w-3xl gap-3">
+                <Avatar role="assistant" />
+                <div className="min-w-0 flex-1">
+                  <div className="bg-card rounded-2xl rounded-tl-md border px-4 py-3.5 text-[0.925rem] leading-relaxed">
+                    <RichText text={streamingContent} />
+                    {/* Blinking cursor */}
+                    <span
+                      className="ml-0.5 inline-block h-[1.1em] w-0.5 translate-y-[2px] animate-pulse bg-current align-middle opacity-70"
+                      aria-hidden
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading dots — only shown before the first token arrives */}
+            {pending && !streamingContent && (
               <div className="flex max-w-3xl gap-3">
                 <Avatar role="assistant" />
                 <div className="bg-card flex items-center gap-1.5 rounded-2xl rounded-tl-md border px-4 py-4">

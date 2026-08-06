@@ -182,12 +182,10 @@ def setup_pipeline(
     # answer anyway, rather than replying "no information provided" to every
     # question the documents happen not to cover.
     qa_system_prompt = (
-        "You are a document assistant. Below is context retrieved from the user's "
-        "own documents.\n\n"
-        "If the context answers the question, answer from it and stay grounded in it.\n\n"
-        "If the context does not contain the answer, do not refuse. Say briefly that "
-        "their documents do not cover it, then answer from your own general knowledge "
-        "and make clear that part is not from their documents.\n\n"
+        "You are a helpful AI assistant. Use the following context to answer the user's question. "
+        "The context may include excerpts from the user's uploaded documents or DuckDuckGo web search results. "
+        "If the context does not contain the answer, draw on your general knowledge and clearly indicate "
+        "when you are doing so. "
         "Never invent details about the documents themselves.\n\n"
         "Format for reading, in Markdown. Use short paragraphs; a bullet list when "
         "you give several facts; a numbered list only when order actually matters; "
