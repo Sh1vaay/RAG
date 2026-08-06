@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -294,13 +294,27 @@ def health_check():
 allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
 allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
 
+if not allowed_origins:
+    # Strict fallback for local development instead of unsafe wildcard
+    allowed_origins = ["http://localhost:3000"]
+
+is_wildcard_origin = "*" in allowed_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins if allowed_origins else ["*"],
-    allow_credentials=bool(allowed_origins),
-    allow_methods=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=not is_wildcard_origin,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 class ChatMessage(BaseModel):
@@ -972,18 +986,50 @@ async def upload_documents(
         "text/markdown", 
         "text/csv"
     }
+    ALLOWED_EXTENSIONS = {
+        ".txt", ".pdf", ".doc", ".docx", ".md", ".csv"
+    }
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB limit
 
     for file in files:
         if file.content_type not in ALLOWED_MIME_TYPES:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
+        if file.size is not None and file.size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"File too large. Maximum size is 10MB.")
             
-        # Sanitise file name to prevent path traversal (CWE-22 / CWE-23). The
-        # workspace root is derived from a verified id, but a crafted filename
-        # could still climb out of it.
+        # Sanitise file name to prevent path traversal (CWE-22 / CWE-23) completely.
+        # Prefix with a short UUID to guarantee no collisions or overwrites.
+        import re
         safe_filename = os.path.basename(file.filename or "")
-        safe_filename = safe_filename.replace("\0", "").replace("/", "").replace("\\", "")
+        safe_filename = re.sub(r'[^a-zA-Z0-9.\-_]', '_', safe_filename).lstrip('.')
         if not safe_filename:
-            continue
+            safe_filename = "unnamed_file"
+            
+        # Extension validation prevents script upload by spoofing MIME types
+        _, ext = os.path.splitext(safe_filename)
+        if ext.lower() not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"Unsupported file extension: {ext}")
+            
+        safe_filename = f"{uuid.uuid4().hex[:8]}_{safe_filename}"
+
+        # Magic bytes check for robust security against malicious scripts
+        magic_bytes = await file.read(2048)
+        await file.seek(0)
+        
+        is_valid_content = False
+        if ext.lower() == ".pdf" and magic_bytes.startswith(b"%PDF-"):
+            is_valid_content = True
+        elif ext.lower() in [".docx", ".doc"] and (magic_bytes.startswith(b"PK\x03\x04") or magic_bytes.startswith(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")):
+            is_valid_content = True
+        elif ext.lower() in [".txt", ".md", ".csv"]:
+            try:
+                magic_bytes.decode('utf-8')
+                is_valid_content = True
+            except UnicodeDecodeError:
+                pass
+                
+        if not is_valid_content:
+            raise HTTPException(status_code=400, detail=f"File content does not match extension: {ext}")
 
         file_bytes = await file.read()
         (workspace.documents_dir / safe_filename).write_bytes(file_bytes)
