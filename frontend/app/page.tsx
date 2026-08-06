@@ -9,8 +9,12 @@ import { useTheme } from "next-themes";
 import { ApiError, api, fetchAuthConfig, type StatusResponse } from "@/lib/api";
 import { authConfigured, supabase } from "@/lib/supabase";
 import {
-  loadSessions, newSession, relativeTime, saveSessions, type Session,
+  clearLocalSessions, loadSessions, newSession, relativeTime, saveSessions, type Session,
 } from "@/lib/sessions";
+import {
+  deleteAllRemoteSessions, deleteRemoteSession, fetchRemoteSessions,
+  migrateLocalSessions, pushSession,
+} from "@/lib/chat-store";
 import { ChatView } from "@/components/views/chat-view";
 import { DocumentsView } from "@/components/views/documents-view";
 import { SettingsView } from "@/components/views/settings-view";
@@ -87,17 +91,45 @@ export default function Page() {
     };
   }, [router]);
 
-  // Sessions live in localStorage, so hydrate after mount to avoid a mismatch.
+  // Local-first: read the browser copy immediately so the sidebar paints without
+  // waiting on the network, then reconcile with Supabase. The remote copy wins,
+  // which is what lets history follow the user to another device.
   useEffect(() => {
-    const { sessions: s, activeId: a } = loadSessions();
-    setSessions(s);
-    setActiveId(a);
-    setMounted(true);
-  }, []);
+    if (!authReady) return;
+    let cancelled = false;
+
+    (async () => {
+      const uid = status?.workspace ?? "local";
+      const local = loadSessions(uid);
+      if (cancelled) return;
+      setSessions(local.sessions);
+      setActiveId(local.activeId);
+      setMounted(true);
+
+      const remote = await fetchRemoteSessions();
+      if (cancelled || !remote) return; // no Supabase, migration not run, or offline
+
+      if (remote.length === 0) {
+        // First sign-in after the migration: lift anything already in this browser
+        // so existing history is not stranded.
+        await migrateLocalSessions(local.sessions);
+        return;
+      }
+      setSessions(remote);
+      setActiveId((current: string) =>
+        remote.some((s: Session) => s.id === current) ? current : remote[0].id,
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // status?.workspace is the verified user id; re-run when it first arrives.
+  }, [authReady, status?.workspace]);
 
   useEffect(() => {
-    if (mounted) saveSessions(sessions, activeId);
-  }, [sessions, activeId, mounted]);
+    if (mounted) saveSessions(status?.workspace ?? "local", sessions, activeId);
+  }, [sessions, activeId, mounted, status?.workspace]);
 
   const refresh = useCallback(() => {
     api
@@ -118,6 +150,12 @@ export default function Page() {
   }, [refresh, authReady]);
 
   async function signOut() {
+    // Wipe this browser's copy first. Without it the next person to sign in on a
+    // shared machine sees the previous user's history — including excerpts of
+    // their documents in the stored citations.
+    clearLocalSessions(status?.workspace);
+    setSessions([]);
+    setActiveId("");
     if (authConfigured) await supabase().auth.signOut();
     router.replace("/login");
   }
@@ -135,19 +173,32 @@ export default function Page() {
     setSessions((all) => [s, ...all]);
     setActiveId(s.id);
     handleSetTab("chat");
+    // Fire-and-forget: the UI already has the session, and chat-store degrades to
+    // local-only if the tables are missing.
+    void pushSession(s);
   }
 
   function removeSession(id: string) {
+    void deleteRemoteSession(id);
     setSessions((all) => {
       const next = all.filter((s) => s.id !== id);
       if (next.length === 0) {
         const fresh = newSession();
         setActiveId(fresh.id);
+        void pushSession(fresh);
         return [fresh];
       }
       if (id === activeId) setActiveId(next[0].id);
       return next;
     });
+  }
+
+  function clearAllSessions() {
+    void deleteAllRemoteSessions();
+    const fresh = newSession();
+    setSessions([fresh]);
+    setActiveId(fresh.id);
+    void pushSession(fresh);
   }
 
   // Hold the shell back until we know whether a session is required, so a
@@ -246,7 +297,7 @@ export default function Page() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { const f = newSession(); setSessions([f]); setActiveId(f.id); }}
+              onClick={clearAllSessions}
               className="text-muted-foreground hover:text-destructive mt-1 h-7 justify-start px-2 text-[11.5px]"
             >
               <Trash2 className="size-3.5" /> Clear all

@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Session } from "@/lib/sessions";
-import { titleFrom } from "@/lib/sessions";
+import { titleFrom, type ChatMessage } from "@/lib/sessions";
+import { pushMessage, pushSession } from "@/lib/chat-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -156,37 +157,41 @@ export function ChatView({ session, onUpdate }: Props) {
       .filter((m) => !m.error)
       .map((m) => ({ role: m.role, content: m.content }));
 
+    const isFirstTurn = session.messages.length === 0;
+    const title = isFirstTurn ? titleFrom(message) : session.title;
+
+    const userMessage: ChatMessage = { role: "user", content: message };
     onUpdate((s) => ({
       ...s,
-      title: s.messages.length === 0 ? titleFrom(message) : s.title,
+      title: isFirstTurn ? title : s.title,
       updatedAt: Date.now(),
-      messages: [...s.messages, { role: "user", content: message }],
+      messages: [...s.messages, userMessage],
     }));
+
+    // Persist in the background — the UI already has the turn, and chat-store
+    // silently degrades to local-only when Supabase is unavailable.
+    void (async () => {
+      if (isFirstTurn) await pushSession({ ...session, title });
+      await pushMessage(session.id, userMessage);
+    })();
 
     setPending(true);
     try {
       const data = await api.chat(message, history);
-      onUpdate((s) => ({
-        ...s,
-        updatedAt: Date.now(),
-        messages: [
-          ...s.messages,
-          {
-            role: "assistant",
-            content: data.answer,
-            route: data.route,
-            sources: data.sources,
-            grounded: data.grounded !== false,
-          },
-        ],
-      }));
+      const reply: ChatMessage = {
+        role: "assistant",
+        content: data.answer,
+        route: data.route,
+        sources: data.sources,
+        grounded: data.grounded !== false,
+      };
+      onUpdate((s) => ({ ...s, updatedAt: Date.now(), messages: [...s.messages, reply] }));
+      void pushMessage(session.id, reply);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      onUpdate((s) => ({
-        ...s,
-        updatedAt: Date.now(),
-        messages: [...s.messages, { role: "assistant", content: msg, error: true }],
-      }));
+      const failure: ChatMessage = { role: "assistant", content: msg, error: true };
+      onUpdate((s) => ({ ...s, updatedAt: Date.now(), messages: [...s.messages, failure] }));
+      void pushMessage(session.id, failure);
     } finally {
       setPending(false);
     }

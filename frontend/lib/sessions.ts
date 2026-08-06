@@ -23,42 +23,63 @@ export interface Session {
   messages: ChatMessage[];
 }
 
-const STORE_KEY = "aether.sessions.v2";
+/**
+ * Storage key, scoped to the signed-in user.
+ *
+ * This used to be one global key with no user in it, and sign-out did not clear
+ * it — so on a shared machine the next person to sign in saw the previous user's
+ * entire history, including document excerpts in `sources`. Scoping the key and
+ * clearing on sign-out closes that.
+ */
+const LEGACY_KEY = "aether.sessions.v2";
+const storeKey = (userId: string) => `aether.sessions.v3.${userId || "local"}`;
 
 export function newSession(): Session {
   return {
-    id: `S${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    id:
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
     title: "New session",
     updatedAt: Date.now(),
     messages: [],
   };
 }
 
-export function loadSessions(): { sessions: Session[]; activeId: string } {
-  if (typeof window === "undefined") {
-    const s = newSession();
-    return { sessions: [s], activeId: s.id };
-  }
+function blank() {
+  const s = newSession();
+  return { sessions: [s], activeId: s.id };
+}
+
+export function loadSessions(userId: string): { sessions: Session[]; activeId: string } {
+  if (typeof window === "undefined") return blank();
   try {
-    const raw = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
-    const sessions: Session[] = Array.isArray(raw.sessions) && raw.sessions.length
-      ? raw.sessions
-      : [newSession()];
-    const activeId = sessions.some((s) => s.id === raw.activeId)
-      ? raw.activeId
-      : sessions[0].id;
+    const raw = JSON.parse(localStorage.getItem(storeKey(userId)) || "{}");
+    const sessions: Session[] =
+      Array.isArray(raw.sessions) && raw.sessions.length ? raw.sessions : [newSession()];
+    const activeId = sessions.some((s) => s.id === raw.activeId) ? raw.activeId : sessions[0].id;
     return { sessions, activeId };
   } catch {
-    const s = newSession();
-    return { sessions: [s], activeId: s.id };
+    return blank();
   }
 }
 
-export function saveSessions(sessions: Session[], activeId: string) {
+export function saveSessions(userId: string, sessions: Session[], activeId: string) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ sessions, activeId }));
+    localStorage.setItem(storeKey(userId), JSON.stringify({ sessions, activeId }));
   } catch (err) {
     console.warn("Could not persist sessions:", err);
+  }
+}
+
+/** Wipe this browser's copy on sign-out so the next user starts clean. */
+export function clearLocalSessions(userId?: string) {
+  try {
+    if (userId) localStorage.removeItem(storeKey(userId));
+    // The old unscoped key predates per-user storage; drop it wherever it is found.
+    localStorage.removeItem(LEGACY_KEY);
+  } catch {
+    /* storage unavailable — nothing to clear */
   }
 }
 
