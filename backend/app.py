@@ -459,10 +459,11 @@ async def update_config(
         # No index yet — legitimate for a new user. The config itself is fine.
         pass
     except Exception as exc:
-        detail = str(exc)
+        print(f"[API ERROR] Config apply failed: {exc}", file=sys.stderr)
+        detail = "An internal server error occurred while applying the configuration. Please check server logs."
         if index_stale:
             detail = (
-                f"{detail} — changing the embedding model invalidates the existing index. "
+                f"{detail} Note: changing the embedding model invalidates the existing index. "
                 f"Re-ingest your documents, then apply this change again."
             )
         raise HTTPException(status_code=400, detail=detail) from exc
@@ -834,7 +835,7 @@ async def chat_stream_endpoint(
             )
         except Exception as exc:
             print(f"[STREAM] Retrieval failed: {exc}", file=sys.stderr)
-            yield f"data: {json.dumps({'error': str(exc), 'done': True})}\n\n"
+            yield f"data: {json.dumps({'error': 'An internal server error occurred while processing your request. Please check server logs.', 'done': True})}\n\n"
             return
 
         route: str = retrieval["route"]
@@ -899,7 +900,7 @@ async def chat_stream_endpoint(
                 if item is None:
                     break
                 if isinstance(item, Exception):
-                    yield f"data: {json.dumps({'error': str(item), 'done': True})}\n\n"
+                    yield f"data: {json.dumps({'error': 'An internal server error occurred while processing your request. Please check server logs.', 'done': True})}\n\n"
                     return
                 yield f"data: {json.dumps({'token': item, 'done': False})}\n\n"
 
@@ -1094,7 +1095,7 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
 
     except Exception as exc:
         meta["status"] = "failed"
-        meta["error"] = str(exc)
+        meta["error"] = "An internal server error occurred while building the index. Please check server logs."
         ACTIVE_BUILDS.pop(build_id, None)
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"\n[API ERROR] Subprocess error: {exc}\n")
