@@ -291,13 +291,13 @@ def health_check():
 
 
 # Enable CORS for frontend integration (CORS origins configurable via env)
-allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "*")
+allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
 allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins if allowed_origins else ["*"],
-    allow_credentials=True,
+    allow_credentials=bool(allowed_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -962,7 +962,20 @@ async def upload_documents(
     workspace = current_workspace(user)
     storage = get_storage_client(workspace.user_id, user.token)
     saved_files = []
+    
+    ALLOWED_MIME_TYPES = {
+        "text/plain", 
+        "application/pdf", 
+        "application/msword", 
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/markdown", 
+        "text/csv"
+    }
+
     for file in files:
+        if file.content_type not in ALLOWED_MIME_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
+            
         # Sanitise file name to prevent path traversal (CWE-22 / CWE-23). The
         # workspace root is derived from a verified id, but a crafted filename
         # could still climb out of it.
