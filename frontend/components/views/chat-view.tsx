@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  ArrowUp, Bot, CornerDownLeft, FileText, Globe, Quote, Route, TriangleAlert, User,
+  ArrowUp, Bot, Check, ChevronDown, Copy, CornerDownLeft, FileText, Globe, Quote,
+  Route, TriangleAlert, User,
 } from "lucide-react";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type SourceDocument } from "@/lib/api";
 import type { Session } from "@/lib/sessions";
 import { titleFrom, type ChatMessage } from "@/lib/sessions";
 import { pushMessage, pushSession } from "@/lib/chat-store";
@@ -109,6 +110,88 @@ function RichText({ text }: { text: string }) {
       >
         {text}
       </ReactMarkdown>
+    </div>
+  );
+}
+
+/**
+ * A citation the reader can actually inspect.
+ *
+ * The snippet is clipped to four lines, which is often mid-sentence — so the card
+ * expands to show it in full, along with the file it came from. It was previously
+ * a static <article> that merely *looked* interactive: it had a hover border but
+ * no click target, no keyboard access, and no way to read the rest of the text.
+ */
+function SourceCard({ index, source }: { index: number; source: SourceDocument }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function copy(e: React.MouseEvent) {
+    e.stopPropagation(); // don't toggle the card while copying from it
+    try {
+      await navigator.clipboard.writeText(source.snippet);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked (insecure origin or denied permission) */
+    }
+  }
+
+  return (
+    <div className="bg-secondary/60 hover:border-primary/40 focus-within:border-primary/60 rounded-xl border transition-colors">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-start gap-2 p-3.5 text-left"
+      >
+        <span className="bg-primary text-primary-foreground mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded text-[10px] font-semibold">
+          {index + 1}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-semibold" title={source.title}>
+            {source.title}
+          </span>
+          <span
+            className={cn(
+              "text-muted-foreground mt-1.5 block text-[11.5px] leading-relaxed",
+              open ? "whitespace-pre-wrap" : "line-clamp-3",
+            )}
+          >
+            {source.snippet}
+          </span>
+        </span>
+        <ChevronDown
+          className={cn(
+            "text-muted-foreground mt-0.5 size-3.5 shrink-0 transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="flex flex-wrap items-center gap-2 border-t px-3.5 py-2.5">
+          <span className="text-muted-foreground bg-card inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10.5px] font-medium">
+            <FileText className="size-3" /> Page {source.page ?? "n/a"}
+          </span>
+          {source.source && (
+            <span
+              className="text-muted-foreground max-w-full truncate font-mono text-[10.5px]"
+              title={source.source}
+            >
+              {source.source}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={copy}
+            className="text-muted-foreground hover:text-primary ml-auto inline-flex items-center gap-1 text-[10.5px] font-medium"
+          >
+            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -372,25 +455,7 @@ export function ChatView({ session, onUpdate }: Props) {
           ) : (
             <div className="flex flex-col gap-2.5 p-3.5">
               {sources.map((s, i) => (
-                <article
-                  key={i}
-                  className="bg-secondary/60 hover:border-primary/40 rounded-xl border p-3.5 transition-colors"
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="bg-primary text-primary-foreground flex size-4.5 shrink-0 items-center justify-center rounded text-[10px] font-semibold">
-                      {i + 1}
-                    </span>
-                    <span className="truncate text-xs font-semibold" title={s.title}>
-                      {s.title}
-                    </span>
-                  </div>
-                  <p className="text-muted-foreground line-clamp-4 text-[11.5px] leading-relaxed">
-                    {s.snippet}
-                  </p>
-                  <span className="text-muted-foreground bg-card mt-2.5 inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10.5px] font-medium">
-                    <FileText className="size-3" /> Page {s.page ?? "n/a"}
-                  </span>
-                </article>
+                <SourceCard key={i} index={i} source={s} />
               ))}
             </div>
           )}
