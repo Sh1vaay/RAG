@@ -51,15 +51,15 @@ export function DocumentsView({ status, onRefresh }: Props) {
 
   // Fetch builds: aggressively every 3 s while a build is running,
   // otherwise back off to every 15 s to avoid hammering Supabase Storage.
-  const isBuilding = builds.some((b) => b.status === "running");
   useEffect(() => {
     fetchBuilds();
-    const interval = setInterval(fetchBuilds, isBuilding ? 3000 : 15000);
+    const running = builds.some((b) => b.status === "running");
+    const interval = setInterval(fetchBuilds, running ? 3000 : 15000);
     return () => clearInterval(interval);
     // Re-register the interval each time the running state changes so the
-    // delay switches between fast and slow without waiting for the old timer.
+    // delay switches between fast (3 s) and slow (15 s) automatically.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBuilding]);
+  }, [builds.some((b) => b.status === "running")]);
 
   async function fetchBuilds() {
     try {
