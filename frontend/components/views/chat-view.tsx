@@ -270,7 +270,9 @@ export function ChatView({ session, onUpdate }: Props) {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
-    let finalMeta: { route: string; sources: typeof session.messages[0]["sources"]; grounded: boolean } | null = null;
+    // Typed explicitly so TypeScript knows the shape inside the finally block.
+    type StreamMeta = { route: string; sources: typeof session.messages[0]["sources"]; grounded: boolean };
+    let finalMeta: StreamMeta | null = null;
 
     try {
       await api.chatStream(
