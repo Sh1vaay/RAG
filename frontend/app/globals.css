@@ -144,6 +144,15 @@
       radial-gradient(1100px 560px at 8% -12%, color-mix(in oklch, var(--primary) 11%, transparent), transparent 62%),
       radial-gradient(880px 480px at 100% 0%, color-mix(in oklch, var(--primary) 6%, transparent), transparent 58%);
     background-attachment: fixed;
+    background-color: var(--background);
+    color: var(--foreground);
+    /* Font smoothing isn't stock Tailwind anymore, but we want the crispness
+       of standard WebKit rendering on modern high-DPI displays. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  button, a, [role="button"], input[type="submit"], input[type="button"], input[type="file"] {
+    cursor: pointer;
   }
   html {
     @apply font-sans;

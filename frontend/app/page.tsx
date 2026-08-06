@@ -38,6 +38,26 @@ export default function Page() {
   const [authReady, setAuthReady] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
 
+  // Read initial tab from URL if present
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = params.get("tab") as Tab;
+      if (urlTab && ["chat", "docs", "status", "settings"].includes(urlTab)) {
+        setTab(urlTab);
+      }
+    }
+  }, []);
+
+  const handleSetTab = useCallback((id: Tab) => {
+    setTab(id);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", id);
+      window.history.replaceState({}, "", url);
+    }
+  }, []);
+
   // Gate the dashboard on a session. Ask the *backend* whether auth is on rather
   // than inferring it from the frontend env, so the two can never disagree.
   useEffect(() => {
@@ -114,7 +134,7 @@ export default function Page() {
     const s = newSession();
     setSessions((all) => [s, ...all]);
     setActiveId(s.id);
-    setTab("chat");
+    handleSetTab("chat");
   }
 
   function removeSession(id: string) {
@@ -163,7 +183,7 @@ export default function Page() {
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => setTab(id)}
+              onClick={() => handleSetTab(id)}
               aria-current={tab === id ? "page" : undefined}
               className={cn(
                 "relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
@@ -196,7 +216,7 @@ export default function Page() {
                   )}
                 >
                   <button
-                    onClick={() => { setActiveId(s.id); setTab("chat"); }}
+                    onClick={() => { setActiveId(s.id); handleSetTab("chat"); }}
                     className="flex min-w-0 flex-1 flex-col text-left"
                   >
                     <span
