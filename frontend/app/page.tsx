@@ -43,19 +43,24 @@ export default function Page() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const cfg = await fetchAuthConfig();
-      if (cancelled) return;
-      if (!cfg.auth_enabled || !authConfigured) {
-        setAuthReady(true); // single-user mode: no sign-in
-        return;
+      try {
+        const cfg = await fetchAuthConfig();
+        if (cancelled) return;
+        if (!cfg.auth_enabled || !authConfigured) {
+          setAuthReady(true);
+          return;
+        }
+        const { data } = await supabase().auth.getSession();
+        if (cancelled) return;
+        if (!data.session) {
+          router.replace("/login");
+          return;
+        }
+        setAuthReady(true);
+      } catch (err) {
+        console.error("Backend unreachable:", err);
+        if (!cancelled) setAuthReady(true); // Let it load into disconnected state instead of spinning
       }
-      const { data } = await supabase().auth.getSession();
-      if (cancelled) return;
-      if (!data.session) {
-        router.replace("/login");
-        return;
-      }
-      setAuthReady(true);
     })();
     return () => {
       cancelled = true;
