@@ -220,6 +220,12 @@ def get_auth_config():
     return auth_status()
 
 
+@app.get("/health")
+def health_check():
+    """Public: unauthenticated health check for Railway/Docker container orchestration."""
+    return {"status": "ok"}
+
+
 # Enable CORS for frontend integration (CORS origins configurable via env)
 allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "*")
 allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
