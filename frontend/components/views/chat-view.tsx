@@ -216,6 +216,9 @@ interface Props {
   onUpdate: (updater: (s: Session) => Session) => void;
 }
 
+type StreamMeta = { route: string; sources: SourceDocument[]; grounded: boolean };
+
+
 export function ChatView({ session, onUpdate }: Props) {
   const [pending, setPending] = useState(false);
   const [draft, setDraft] = useState("");
@@ -270,8 +273,8 @@ export function ChatView({ session, onUpdate }: Props) {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
-    // Typed explicitly so TypeScript knows the shape inside the finally block.
-    type StreamMeta = { route: string; sources: typeof session.messages[0]["sources"]; grounded: boolean };
+    // finalMeta is populated by the onDone callback and read in the finally block.
+    // Using a concrete type (not a local alias) ensures TS can narrow it correctly.
     let finalMeta: StreamMeta | null = null;
 
     try {
@@ -285,7 +288,7 @@ export function ChatView({ session, onUpdate }: Props) {
         },
         // onDone — stash metadata; message is finalized in the finally block
         (meta) => {
-          finalMeta = meta as typeof finalMeta;
+          finalMeta = meta;
         },
         // onError — surface as an error message bubble
         (errMsg) => {
@@ -305,12 +308,13 @@ export function ChatView({ session, onUpdate }: Props) {
     } finally {
       // Finalise the streamed content into the session message list
       if (streamingRef.current && finalMeta) {
+        const meta = finalMeta as StreamMeta;
         const reply: ChatMessage = {
           role: "assistant",
           content: streamingRef.current,
-          route: finalMeta.route,
-          sources: finalMeta.sources,
-          grounded: finalMeta.grounded !== false,
+          route: meta.route,
+          sources: meta.sources,
+          grounded: meta.grounded,
         };
         onUpdate((s) => ({ ...s, updatedAt: Date.now(), messages: [...s.messages, reply] }));
         void pushMessage(session.id, reply);
