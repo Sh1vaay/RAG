@@ -171,16 +171,34 @@ function SourceCard({ index, source }: { index: number; source: SourceDocument }
 
       {open && (
         <div className="flex flex-wrap items-center gap-2 border-t px-3.5 py-2.5">
-          <span className="text-muted-foreground bg-card inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10.5px] font-medium">
-            <FileText className="size-3" /> Page {source.page ?? "n/a"}
-          </span>
-          {source.source && (
-            <span
-              className="text-muted-foreground max-w-full truncate font-mono text-[10.5px]"
-              title={source.source}
-            >
-              {source.source}
+          {source.source?.startsWith("http") ? (
+            <span className="text-muted-foreground bg-card inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10.5px] font-medium">
+              <Globe className="size-3" /> Web Result
             </span>
+          ) : (
+            <span className="text-muted-foreground bg-card inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10.5px] font-medium">
+              <FileText className="size-3" /> Page {source.page ?? "n/a"}
+            </span>
+          )}
+          {source.source && (
+            source.source.startsWith("http") ? (
+              <a
+                href={source.source}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:text-primary max-w-full truncate font-mono text-[10.5px] hover:underline"
+                title={source.source}
+              >
+                {source.source}
+              </a>
+            ) : (
+              <span
+                className="text-muted-foreground max-w-full truncate font-mono text-[10.5px]"
+                title={source.source}
+              >
+                {source.source}
+              </span>
+            )
           )}
           <button
             type="button"
@@ -376,7 +394,10 @@ export function ChatView({ session, onUpdate }: Props) {
                           answer, so say plainly where it came from. */}
                       {!m.error && m.grounded === false && (
                         <span className="text-warning border-warning/30 bg-warning/10 flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10.5px] font-semibold">
-                          <Globe className="size-3" /> general knowledge — not your documents
+                          <Globe className="size-3" /> 
+                          {m.sources && m.sources.length > 0 
+                            ? "DuckDuckGo Web Search — not your documents" 
+                            : "general knowledge — not your documents"}
                         </span>
                       )}
                     </span>
@@ -424,14 +445,19 @@ export function ChatView({ session, onUpdate }: Props) {
             {pending && !streamingContent && (
               <div className="flex max-w-3xl gap-3">
                 <Avatar role="assistant" />
-                <div className="bg-card flex items-center gap-1.5 rounded-2xl rounded-tl-md border px-4 py-4">
-                  {[0, 150, 300].map((d) => (
-                    <span
-                      key={d}
-                      className="bg-primary/70 size-1.5 animate-bounce rounded-full"
-                      style={{ animationDelay: `${d}ms` }}
-                    />
-                  ))}
+                <div className="bg-card flex items-center gap-3 rounded-2xl rounded-tl-md border px-4 py-3.5">
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    {[0, 150, 300].map((d) => (
+                      <span
+                        key={d}
+                        className="bg-primary/70 size-1.5 animate-bounce rounded-full"
+                        style={{ animationDelay: `${d}ms` }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-muted-foreground animate-pulse text-[0.925rem]">
+                    Thinking or searching the web...
+                  </span>
                 </div>
               </div>
             )}
