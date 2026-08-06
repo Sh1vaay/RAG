@@ -189,6 +189,10 @@ def setup_pipeline(
         "their documents do not cover it, then answer from your own general knowledge "
         "and make clear that part is not from their documents.\n\n"
         "Never invent details about the documents themselves.\n\n"
+        "Format for reading, in Markdown. Use short paragraphs; a bullet list when "
+        "you give several facts; a numbered list only when order actually matters; "
+        "**bold** for key figures and terms. Keep it as short as the question allows "
+        "and do not pad the answer with restatements of the question.\n\n"
         "Context:\n{context}"
     )
     qa_prompt = ChatPromptTemplate.from_messages(

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowUp, Bot, CornerDownLeft, FileText, Globe, Quote, Route, TriangleAlert, User,
 } from "lucide-react";
@@ -21,24 +23,92 @@ const SUGGESTIONS = [
 
 /** Minimal inline markdown — bold, italic, code. Escaping is inherent: we
  *  build React nodes rather than setting innerHTML. */
+/**
+ * Renders an assistant reply as markdown.
+ *
+ * The previous version handled only inline markers and emitted everything else as
+ * a <span>, so HTML collapsed newlines into spaces — paragraphs, lists and headings
+ * all flattened into one block of text. That was the readability problem, not the
+ * model's output.
+ *
+ * Raw HTML is deliberately NOT enabled (no rehype-raw): model output is untrusted
+ * input, and react-markdown escapes it by default.
+ */
 function RichText({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g).filter(Boolean);
   return (
-    <>
-      {parts.map((part, i) => {
-        if (part.startsWith("**") && part.endsWith("**"))
-          return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
-        if (part.startsWith("`") && part.endsWith("`"))
-          return (
-            <code key={i} className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-primary">
-              {part.slice(1, -1)}
-            </code>
-          );
-        if (part.startsWith("*") && part.endsWith("*"))
-          return <em key={i}>{part.slice(1, -1)}</em>;
-        return <span key={i}>{part}</span>;
-      })}
-    </>
+    <div className="space-y-3 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: ({ children }) => <p className="leading-relaxed">{children}</p>,
+
+          // Headings step down in size but stay close to body text — an answer is
+          // not a document, and oversized headings break the reading rhythm.
+          h1: ({ children }) => <h3 className="mt-4 text-[1.05em] font-semibold">{children}</h3>,
+          h2: ({ children }) => <h3 className="mt-4 text-[1.02em] font-semibold">{children}</h3>,
+          h3: ({ children }) => <h4 className="mt-3 font-semibold">{children}</h4>,
+          h4: ({ children }) => <h4 className="mt-3 font-semibold">{children}</h4>,
+
+          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
+          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary font-medium underline underline-offset-2"
+            >
+              {children}
+            </a>
+          ),
+
+          blockquote: ({ children }) => (
+            <blockquote className="border-primary/40 text-muted-foreground border-l-2 pl-3 italic">
+              {children}
+            </blockquote>
+          ),
+
+          code: ({ className, children }) => {
+            // react-markdown gives fenced blocks a `language-*` class; inline code
+            // has none. Only the block form needs its own scroll container.
+            const isBlock = Boolean(className);
+            if (isBlock) {
+              return (
+                <code className="block overflow-x-auto font-mono text-[0.85em] leading-relaxed">
+                  {children}
+                </code>
+              );
+            }
+            return (
+              <code className="bg-muted text-primary rounded border px-1.5 py-0.5 font-mono text-[0.85em]">
+                {children}
+              </code>
+            );
+          },
+          pre: ({ children }) => (
+            <pre className="bg-muted overflow-x-auto rounded-lg border p-3">{children}</pre>
+          ),
+
+          // Tables must scroll inside their own box, never widen the message bubble.
+          table: ({ children }) => (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-left text-[0.9em]">{children}</table>
+            </div>
+          ),
+          th: ({ children }) => (
+            <th className="bg-muted border-b px-3 py-2 font-semibold">{children}</th>
+          ),
+          td: ({ children }) => <td className="border-b px-3 py-2 last:border-0">{children}</td>,
+
+          hr: () => <hr className="border-border" />,
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
   );
 }
 
