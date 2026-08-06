@@ -101,7 +101,7 @@ graph TD
     Output --> API
     
     %% External Services
-    LLM((OpenAI / Cohere API)):::external
+    LLM((Ollama / OpenAI / Anthropic<br/>Gemini / Grok / Cohere)):::external
     FastChain -.- LLM
     QueryAnalyzer -.- LLM
     Generator -.- LLM
@@ -110,7 +110,7 @@ graph TD
 
 ### 🔹 Layer-by-Layer Breakdown
 
-1. **Client & API Layer (FastAPI)**: Serves multiple endpoints (`/api/chat`, `/api/upload`, `/api/ingest`, `/api/config`). Handles CORS, payload validation, and serves the static dashboard.
+1. **Client & API Layer (FastAPI)**: Serves `/api/chat`, `/api/upload`, `/api/ingest`, `/api/config`, `/api/status` and `/api/providers`, all requiring a verified Supabase session when auth is configured. Handles CORS, payload validation, and serves the Next.js static export.
 2. **Orchestration & Routing (Semantic Router)**: Immediately evaluates the query against predefined semantic boundaries. If the query is conversational (e.g., "Hello", "Thanks"), it bypasses the database entirely, reducing API cost and latency to `< 500ms`.
 3. **Query Analysis (Pydantic & LLM)**: For complex queries, a structured LLM extracts constraints (e.g., `publish_year > 2022`, `file_type: PDF`). These constraints are transformed into strict metadata filters for the vector stores.
 4. **Hybrid Retrieval & Reranking Engine**: 
@@ -170,7 +170,11 @@ sequenceDiagram
 * 🪞 **Double-Guardrail Self-RAG Evaluator**: Uses a two-step validation chain (Hallucination Grader + Answer Relevance Grader) to run verification loops.
 * ✂️ **Semantic Chunking**: Identifies meaning-based boundaries by tracking semantic drift across adjacent sentences, preventing paragraph truncation.
 * 🎯 **Flashrank CPU Reranking**: Re-ranks candidates locally on CPU using optimized quantized cross-encoder models.
-* ☁️ **Supabase Cloud Sync (Phase 3)**: Automatic backup and cross-device sync of documents, FAISS indices, and encrypted user configuration to Supabase Storage, secured via strict Row-Level Security (RLS) ensuring strict tenant data isolation without service-role keys.
+* 🌍 **Graceful General-Knowledge Fallback**: When retrieval surfaces nothing relevant, the assistant answers from general knowledge instead of refusing — and the reply is explicitly labelled *"general knowledge — not your documents"* so a grounded answer is never confused with an ungrounded one.
+* 🔐 **Supabase Authentication**: Email sign-in/sign-up. Access tokens are verified locally against the project's public JWKS (ES256), so the backend needs no JWT secret and no service-role key.
+* 🏢 **Per-User Workspaces**: Every account gets its own documents, its own FAISS index and its own provider settings. The user id comes from the verified `sub` claim and nowhere else.
+* 🎛️ **Six Interchangeable Providers**: Ollama, OpenAI, Anthropic, Gemini, Grok and Cohere. The chat model and the embedding model are chosen **independently**, because Anthropic and Grok publish no embeddings API.
+* ☁️ **Supabase Cloud Sync**: Documents, FAISS indices and encrypted user configuration sync to Supabase Storage, isolated by Row-Level Security rather than a privileged service key.
 
 ---
 
@@ -179,18 +183,25 @@ sequenceDiagram
 This repository contains both the final production-ready system and the original prototypes from the first phase of the development lifecycle:
 
 ```text
-├── src/                  # (ACTIVE) Final Aether AI Engine (LangGraph, FAISS, FastAPI)
-├── tests/                # (ACTIVE) Pytest suite for the final pipeline
-├── data/                 # (ACTIVE) Master directory for raw PDFs and CSV files
-├── documents/            # (ACTIVE) Runtime ingestion directory for FAISS vector generation
-├── eval/                 # (ACTIVE) Golden JSON sets for faithfulness evaluation scoring
-├── evaluate.py           # (ACTIVE) Custom evaluation harness to generate accuracy metrics
-├── prototype_v1/         # (ARCHIVE) Original TF-IDF/ChromaDB basic scripts
-│   ├── src/              # Obsolete basic retriever logic
-│   ├── tests/            # Obsolete tests for basic logic
-│   └── scripts/          # Obsolete manual data cleaning scripts
-├── .github/              # CI/CD Workflows (tests active src/ and tests/)
-└── Dockerfile            # Containerization for the active backend
+├── backend/              # (ACTIVE) Aether AI engine — FastAPI, LangGraph, FAISS
+│   ├── app.py            #   Routes, per-user pipeline cache, auth wiring
+│   ├── auth.py           #   Supabase JWT verification against the project JWKS
+│   ├── workspace.py      #   Per-user path resolution + Storage sync
+│   ├── providers.py      #   The six-provider factory (explicit config, no globals)
+│   ├── user_config.py    #   Per-user settings; API keys encrypted at rest
+│   ├── storage.py        #   Supabase Storage client (acts as the signed-in user)
+│   ├── main.py           #   setup_pipeline: retrievers, reranker, chains
+│   ├── ingest.py         #   Indexing CLI (semantic chunking, multi-rep, RAPTOR)
+│   └── query_processor.py, agentic_graph.py, decomposition_graph.py, multi_rep_utils.py
+├── frontend/             # (ACTIVE) Next.js 16 + shadcn/ui dashboard
+├── workspaces/           # (RUNTIME) Per-user documents and indexes — gitignored
+├── tests/                # (ACTIVE) Pytest suite
+├── data/                 # (ACTIVE) Source PDFs and CSVs used to generate samples
+├── eval/                 # (ACTIVE) Golden JSON sets for faithfulness scoring
+├── evaluate.py           # (ACTIVE) Evaluation harness
+├── prototype_v1/         # (ARCHIVE) Original TF-IDF/ChromaDB scripts
+├── .github/              # CI: ruff, compileall, pytest
+└── Dockerfile            # Containerization for the backend
 ```
 
 > **Note**: The `prototype_v1/` directory contains legacy scripts from early development stages, preserved for historical context.
@@ -218,28 +229,47 @@ Create a `.env` file from the example:
 cp .env.example .env
 ```
 
-No API keys are required — the chat model and the embedding model both run locally
-through [Ollama](https://ollama.com), and the reranker (Flashrank) runs on CPU.
-Pull the two models once, then make sure the Ollama daemon is running:
+**No LLM API keys are required.** By default the chat model and the embedding model
+both run locally through [Ollama](https://ollama.com), and the reranker (Flashrank)
+runs on CPU. Pull the two default models once and leave the daemon running:
 ```bash
-ollama pull llama3.2
+ollama pull llama3.2:1b
 ollama pull nomic-embed-text
 ```
-Override `OLLAMA_MODEL` / `OLLAMA_EMBED_MODEL` in `.env` to swap models — no code change needed.
 
-### 2. Running Data Ingestion
-Populate the FAISS and BM25 vector databases by processing the documents in the `documents/` folder:
+Swap providers with `LLM_PROVIDER` / `EMBEDDING_PROVIDER` and override the model with
+`LLM_MODEL` / `EMBEDDING_MODEL` — in `.env`, or per-user from the Settings tab. No code
+change either way.
+
+> **Authentication is optional.** Leave `NEXT_PUBLIC_SUPABASE_URL` unset and the app
+> runs single-user against a shared `local` workspace with no sign-in. Set it, and every
+> `/api/*` route requires a Supabase session and each account gets its own workspace.
+
+### 2. Building the Index
+Upload documents from the dashboard, or index a workspace directly:
 
 ```bash
-python -m backend.ingest
+python -m backend.ingest --user local        # add --raptor for the cluster tree
 ```
 
 ### 3. Starting the Server
-Run the FastAPI backend server:
 
 ```bash
 uvicorn backend.app:app --host 0.0.0.0 --port 8000
 ```
+
+Prefer this over `python -m backend.app`: that entrypoint enables `--reload`, and on
+Windows the reloader spawns worker processes that outlive the parent, holding the port
+and serving stale code.
+
+The frontend is a Next.js static export served by the same process. Build it once:
+
+```bash
+cd frontend && npm install && npm run build   # emits frontend/out
+```
+
+For UI work, `npm run dev` on port 3000 hot-reloads against the same API; point it at the
+backend with `NEXT_PUBLIC_API_BASE` in `frontend/.env.local`.
 
 ### 4. Running Evaluations & Tests
 To view the accuracy metrics and system faithfulness (verifying the jump from the flawed v1 to the fixed v2 golden set):
@@ -256,7 +286,8 @@ pytest tests/
 
 ## 🐳 Docker Deployment
 
-For clean isolation, the project includes a production-ready multi-stage `Dockerfile`.
+The backend ships as a slim Python image. The frontend is built separately and either
+served from `frontend/out` or deployed on its own host.
 
 ```bash
 # Build the image
@@ -268,14 +299,34 @@ docker run -p 8000:8000 \
     -e OLLAMA_BASE_URL="http://host.docker.internal:11434" \
     aether-ai
 ```
-*(Note: Docker ignores the archived `prototype_v1` and raw `data` folders to keep the container lightweight and strictly focused on production).*
+*(Note: `.dockerignore` excludes the raw `data/` folder, the frontend build inputs and
+`workspaces/` — which is mounted as a persistent volume in production rather than baked
+into the image.)*
 
 ---
 
 ## 🔒 Security & Quality Assurances
-* **Least Privilege (Docker)**: The `Dockerfile` operates under a non-root user (`appuser`).
-* **Path Traversal Protection**: Uploaded filenames are strictly sanitized before being saved to the file system.
-* **No Leaked Secrets**: All API keys are loaded strictly via `.env` variables and `os.getenv()`.
+
+* **Identity is never client-supplied**: the workspace and every Storage prefix derive
+  from the JWT's verified `sub` claim, not from any request body, header or query string.
+* **No service-role key exists in this app**: the backend acts *as the signed-in user*, so
+  Supabase Row-Level Security is the actual isolation mechanism rather than defence-in-depth
+  that a forgotten `WHERE` clause could bypass.
+* **Local JWT verification**: access tokens are checked against the project's public JWKS
+  (ES256). A token signed with any other key is rejected, and an unknown key id returns
+  401 rather than a misleading 503.
+* **Path traversal protection**: user ids are matched against a strict pattern and the
+  resolved workspace path is asserted to sit inside the workspace root; uploaded filenames
+  are reduced to their basename.
+* **API keys encrypted at rest**: per-user credentials are stored Fernet-encrypted, never
+  returned by any endpoint, and never written to the process environment.
+* **Grounding is labelled, not assumed**: replies that fall back to general knowledge are
+  marked as such and carry no citations.
+
+> **Known gap**: the container currently runs as **root**. The non-root `appuser` is
+> commented out in the `Dockerfile` so that Railway's persistent volume at
+> `/app/workspaces` stays writable. Fix by pre-creating the volume with matching
+> ownership, then re-enabling the `USER` directive.
 
 ---
 

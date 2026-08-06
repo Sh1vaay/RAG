@@ -74,6 +74,9 @@ export interface ChatResponse {
   answer: string;
   route: string;
   sources: SourceDocument[];
+  /** False when the answer came from the model's general knowledge because
+   *  retrieval found nothing relevant in the user's documents. */
+  grounded?: boolean;
 }
 
 export interface ConfigPayload {

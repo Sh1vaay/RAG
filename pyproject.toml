@@ -51,7 +51,7 @@ norecursedirs = ["prototype_v1", "frontend", ".venv", "workspaces", "data"]
 line-length = 100
 target-version = "py312"
 # Same reasoning: the archived prototype is not held to the current lint rules.
-exclude = ["prototype_v1", "frontend", ".venv", "workspaces"]
+exclude = ["prototype_v1", "frontend", ".venv", "workspaces", "scratch"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

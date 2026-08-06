@@ -28,8 +28,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from fastapi import BackgroundTasks
 from cryptography.fernet import Fernet, InvalidToken
+from fastapi import BackgroundTasks
 
 from .providers import ALL_KEY_ENVS, ProviderConfig, env_defaults
 from .workspace import WORKSPACE_ROOT, Workspace

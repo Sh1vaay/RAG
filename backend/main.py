@@ -174,7 +174,23 @@ def setup_pipeline(
     )
 
     # Prompt for final response generation
-    qa_system_prompt = "Answer the question based only on the following context:\n\n{context}"
+    # Retrieval always returns *something*: FAISS hands back the k nearest vectors
+    # whether or not they are relevant, and the cross-encoder is unreliable
+    # out-of-domain (measured: an unrelated question scored 0.99 against an
+    # unrelated chunk). So relevance cannot be decided before generation — the
+    # model has to read the context and judge. This prompt lets it do that and
+    # answer anyway, rather than replying "no information provided" to every
+    # question the documents happen not to cover.
+    qa_system_prompt = (
+        "You are a document assistant. Below is context retrieved from the user's "
+        "own documents.\n\n"
+        "If the context answers the question, answer from it and stay grounded in it.\n\n"
+        "If the context does not contain the answer, do not refuse. Say briefly that "
+        "their documents do not cover it, then answer from your own general knowledge "
+        "and make clear that part is not from their documents.\n\n"
+        "Never invent details about the documents themselves.\n\n"
+        "Context:\n{context}"
+    )
     qa_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", qa_system_prompt),

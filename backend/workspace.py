@@ -162,9 +162,9 @@ class Workspace:
             return
         from .storage import (
             get_storage_client,
+            sync_builds_to_storage,
             sync_documents_to_storage,
             sync_index_to_storage,
-            sync_builds_to_storage,
         )
 
         storage = get_storage_client(self.user_id, token)
@@ -175,7 +175,7 @@ class Workspace:
         nblds = sync_builds_to_storage(storage, self.builds_dir)
         if ndocs or nidx or nblds:
             print(
-                f"☁️  [Storage] Synced {ndocs} doc(s), {nidx} index file(s), and {nblds} build file(s) for "
-                f"workspace '{self.user_id}'.",
+                f"☁️  [Storage] Synced {ndocs} doc(s), {nidx} index file(s), "
+                f"{nblds} build file(s) for workspace '{self.user_id}'.",
                 file=sys.stderr,
             )

@@ -9,7 +9,7 @@ from collections import OrderedDict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -67,6 +67,33 @@ MAX_RESIDENT_PIPELINES = int(os.getenv("MAX_RESIDENT_PIPELINES", "4"))
 # Ingestion makes one model call per chunk. On CPU-bound local models that is slow,
 # so the ceiling is generous — it exists to stop a wedged run holding the lock forever.
 INGEST_TIMEOUT_SECONDS = int(os.getenv("INGEST_TIMEOUT_SECONDS", "3600"))
+
+# Below this cross-encoder score the retrieved chunks are not about the question at
+# all. Measured against a coffee-handbook index: "what is the capital of France?"
+# scored 0.0013, while genuine hits scored 0.79-0.99.
+#
+# The floor is deliberately low. Cross-encoders are unreliable in the *other*
+# direction — "explain quantum entanglement" scored 0.988 against an unrelated
+# chunk — so a high score proves nothing and only a very low one is trustworthy.
+# Catching the obvious misses is all this is for; the prompt handles the rest by
+# letting the model read the context and judge for itself.
+RELEVANCE_FLOOR = float(os.getenv("RELEVANCE_FLOOR", "0.02"))
+
+
+def _context_is_relevant(docs: list) -> bool:
+    """True when retrieval produced context plausibly about the question."""
+    if not docs:
+        return False
+    scores = [
+        doc.metadata.get("relevance_score")
+        for doc in docs
+        if doc.metadata.get("relevance_score") is not None
+    ]
+    if not scores:
+        # No reranker score available (the fast path skips reranking), so we cannot
+        # judge — assume grounded rather than mislabel a good answer.
+        return True
+    return max(float(s) for s in scores) >= RELEVANCE_FLOOR
 
 
 class PipelineCache:
@@ -263,6 +290,11 @@ class ChatResponse(BaseModel):
     answer: str
     route: str
     sources: List[SourceDocument]
+    grounded: bool = True
+    """False when retrieval found nothing usable, so the answer came from the
+    model's general knowledge rather than the user's documents. The dashboard
+    badges these — an ungrounded answer that looks grounded is worse than no
+    answer at all."""
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -551,6 +583,17 @@ def chat_endpoint(
                     }
                 )
 
+        # An answer counts as grounded only when the reranked context actually
+        # cleared the relevance floor. Below it, retrieval returned nearest
+        # neighbours that happen to be unrelated — the prompt lets the model fall
+        # back to general knowledge, and this flag lets the UI say so.
+        grounded = _context_is_relevant(context_docs)
+
+        # Citations are meaningless for an ungrounded answer: they would show
+        # chunks the answer was not actually based on.
+        if not grounded:
+            context_docs = []
+
         # Process and de-duplicate citations
         seen_keys = set()
         for doc in context_docs:
@@ -566,7 +609,12 @@ def chat_endpoint(
                     SourceDocument(title=title, source=source_url, page=page, snippet=snippet)
                 )
 
-        return ChatResponse(answer=answer, route=route, sources=sources_list[:5])
+        return ChatResponse(
+            answer=answer,
+            route=route,
+            sources=sources_list[:5],
+            grounded=grounded,
+        )
 
     except Exception as e:
         print(f"[API ERROR] Chat execution failed: {e}", file=sys.stderr)
@@ -648,7 +696,7 @@ async def delete_document(
 def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str, token: str):
     log_file = workspace.builds_dir / f"{build_id}.log"
     meta_file = workspace.builds_dir / f"{build_id}.json"
-    
+
     meta = {
         "id": build_id,
         "status": "running",
@@ -658,19 +706,19 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
         "error": None
     }
     meta_file.write_text(json.dumps(meta))
-    
+
     cmd = [project_python(), "-m", "backend.ingest", "--user", workspace.user_id]
     if raptor:
         cmd.append("--raptor")
-        
+
     child_env = os.environ.copy()
     child_env["PYTHONIOENCODING"] = "utf-8"
     child_env["PYTHONUTF8"] = "1"
-    
+
     try:
         with open(log_file, "w", encoding="utf-8") as f:
             f.write(f"Starting build {build_id}...\n")
-            
+
             process = subprocess.Popen(
                 cmd,
                 cwd=str(PROJECT_ROOT),
@@ -679,11 +727,11 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
                 env=child_env
             )
             ACTIVE_BUILDS[build_id] = process
-            
+
             # Wait for it to finish in this thread
             returncode = process.wait()
             ACTIVE_BUILDS.pop(build_id, None)
-        
+
         if returncode != 0:
             meta["status"] = "failed"
             meta["error"] = f"exit code {returncode}"
@@ -691,7 +739,7 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
                 f.write(f"\n[API ERROR] Ingestion failed with exit code {returncode}\n")
         else:
             meta["status"] = "completed"
-            
+
             try:
                 pipelines.invalidate(workspace.user_id)
                 pipelines.get(workspace)
@@ -702,7 +750,7 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
                 meta["status"] = "failed"
                 with open(log_file, "a", encoding="utf-8") as f:
                     f.write(f"\n[API ERROR] Reload failed: {exc}\n")
-                    
+
             if meta["status"] == "completed":
                 try:
                     with open(log_file, "a", encoding="utf-8") as f:
@@ -713,7 +761,7 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
                 except Exception as exc:
                     with open(log_file, "a", encoding="utf-8") as f:
                         f.write(f"[API WARN] Cloud sync failed: {exc}\n")
-                    
+
     except Exception as exc:
         meta["status"] = "failed"
         meta["error"] = str(exc)
@@ -722,13 +770,14 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
             f.write(f"\n[API ERROR] Subprocess error: {exc}\n")
     finally:
         meta["completed_at"] = datetime.now(timezone.utc).isoformat()
-        
-        # In case the build was cancelled, override the status if it hasn't been set by another process
+
+        # If the build was cancelled, override the status unless another process
+        # has already set it.
         if meta["status"] == "running":
              # This handles the ghost build issue when the server restarted mid-build
              meta["status"] = "failed"
              meta["error"] = "Cancelled or server restarted"
-             
+
         meta_file.write_text(json.dumps(meta))
         ACTIVE_BUILDS.pop(build_id, None)
 
@@ -737,7 +786,7 @@ def _run_ingestion_background(workspace: Workspace, raptor: bool, build_id: str,
 def cancel_build(build_id: str, user: CurrentUser = Depends(get_current_user)):
     """Cancel a running build."""
     workspace = current_workspace(user)
-    
+
     # 1. Kill the process if it's currently actively tracked in memory
     process = ACTIVE_BUILDS.get(build_id)
     if process:
@@ -746,7 +795,7 @@ def cancel_build(build_id: str, user: CurrentUser = Depends(get_current_user)):
             ACTIVE_BUILDS.pop(build_id, None)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to kill process: {e}")
-            
+
     # 2. Even if it's not in memory (e.g., server restarted leaving a 'ghost' build),
     # explicitly mark it as cancelled in the JSON file so the user is unblocked.
     meta_file = workspace.builds_dir / f"{build_id}.json"
@@ -758,7 +807,7 @@ def cancel_build(build_id: str, user: CurrentUser = Depends(get_current_user)):
                 meta["completed_at"] = datetime.now(timezone.utc).isoformat()
                 meta["error"] = "Build cancelled by user"
                 meta_file.write_text(json.dumps(meta))
-                
+
                 # Append to logs
                 log_file = workspace.builds_dir / f"{build_id}.log"
                 if log_file.exists():
@@ -778,7 +827,7 @@ async def trigger_ingestion(
 ):
     """Start an ingestion background job and return a build_id."""
     workspace = current_workspace(user)
-    
+
     # Check if a build is already running
     if workspace.builds_dir.exists():
         for p in workspace.builds_dir.glob("*.json"):
@@ -787,7 +836,10 @@ async def trigger_ingestion(
                 if m.get("status") == "running":
                     raise HTTPException(
                         status_code=409,
-                        detail="An ingestion is already running for this workspace. Wait for it to finish.",
+                        detail=(
+                            "An ingestion is already running for this workspace. "
+                            "Wait for it to finish."
+                        ),
                     )
             except Exception:
                 continue
@@ -807,10 +859,10 @@ async def trigger_ingestion(
 @app.get("/api/builds")
 def list_builds(user: CurrentUser = Depends(get_current_user)):
     workspace = current_workspace(user)
-    
+
     # Ensure local cache is up-to-date with cloud
     workspace.sync_builds_from_storage(user.token)
-    
+
     builds = []
     if workspace.builds_dir.exists():
         for p in workspace.builds_dir.glob("*.json"):
@@ -827,21 +879,21 @@ async def stream_build_logs(build_id: str, user: CurrentUser = Depends(get_curre
     workspace = current_workspace(user)
     log_file = workspace.builds_dir / f"{build_id}.log"
     meta_file = workspace.builds_dir / f"{build_id}.json"
-    
+
     if not meta_file.exists():
         raise HTTPException(status_code=404, detail="Build not found.")
-        
+
     async def log_generator():
         # Open file in read mode. It might not exist immediately if the thread hasn't opened it yet.
         for _ in range(10):
             if log_file.exists():
                 break
             await asyncio.sleep(0.2)
-            
+
         if not log_file.exists():
             yield "event: close\ndata: \n\n"
             return
-            
+
         with open(log_file, "r", encoding="utf-8") as f:
             while True:
                 line = f.readline()
@@ -859,7 +911,7 @@ async def stream_build_logs(build_id: str, user: CurrentUser = Depends(get_curre
                     # Yield a keep-alive comment so the connection doesn't drop
                     yield ": keep-alive\n\n"
                     await asyncio.sleep(0.5)
-                    
+
     return StreamingResponse(log_generator(), media_type="text/event-stream")
 
 

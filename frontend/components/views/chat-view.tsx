@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Bot, CornerDownLeft, FileText, Quote, Route, TriangleAlert, User } from "lucide-react";
+import {
+  ArrowUp, Bot, CornerDownLeft, FileText, Globe, Quote, Route, TriangleAlert, User,
+} from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Session } from "@/lib/sessions";
 import { titleFrom } from "@/lib/sessions";
@@ -99,7 +101,13 @@ export function ChatView({ session, onUpdate }: Props) {
         updatedAt: Date.now(),
         messages: [
           ...s.messages,
-          { role: "assistant", content: data.answer, route: data.route, sources: data.sources },
+          {
+            role: "assistant",
+            content: data.answer,
+            route: data.route,
+            sources: data.sources,
+            grounded: data.grounded !== false,
+          },
         ],
       }));
     } catch (err) {
@@ -154,11 +162,20 @@ export function ChatView({ session, onUpdate }: Props) {
                 <div key={i} className="flex max-w-3xl gap-3">
                   <Avatar role="assistant" />
                   <div className="min-w-0 flex-1">
-                    {m.route && (
-                      <span className="text-muted-foreground mb-1.5 flex items-center gap-1 text-[10.5px] font-semibold tracking-wider uppercase">
-                        <Route className="size-3" /> {m.route} route
-                      </span>
-                    )}
+                    <span className="mb-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      {m.route && (
+                        <span className="text-muted-foreground flex items-center gap-1 text-[10.5px] font-semibold tracking-wider uppercase">
+                          <Route className="size-3" /> {m.route} route
+                        </span>
+                      )}
+                      {/* An ungrounded answer that looks grounded is worse than no
+                          answer, so say plainly where it came from. */}
+                      {!m.error && m.grounded === false && (
+                        <span className="text-warning border-warning/30 bg-warning/10 flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10.5px] font-semibold">
+                          <Globe className="size-3" /> general knowledge — not your documents
+                        </span>
+                      )}
+                    </span>
                     <div
                       className={cn(
                         "rounded-2xl rounded-tl-md border px-4 py-3.5 text-[0.925rem] leading-relaxed",

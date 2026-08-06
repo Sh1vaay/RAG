@@ -12,6 +12,8 @@ export interface ChatMessage {
   route?: string;
   sources?: SourceDocument[];
   error?: boolean;
+  /** False when the answer is general knowledge, not from the user's documents. */
+  grounded?: boolean;
 }
 
 export interface Session {

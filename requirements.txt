@@ -3,17 +3,24 @@
 aiohappyeyeballs==2.7.1
     # via aiohttp
 aiohttp==3.14.3
-    # via langchain-community
+    # via
+    #   langchain-community
+    #   langchain-xai
 aiosignal==1.4.0
     # via aiohttp
 annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
+anthropic==0.120.2
+    # via langchain-anthropic
 anyio==4.14.2
     # via
+    #   anthropic
+    #   google-genai
     #   httpx
     #   langsmith
+    #   openai
     #   starlette
 attrs==26.1.0
     # via aiohttp
@@ -28,8 +35,10 @@ certifi==2026.7.22
     #   httpcore
     #   httpx
     #   requests
-cffi==2.1.1 ; platform_python_implementation != 'CPython'
-    # via brotlicffi
+cffi==2.1.1
+    # via
+    #   brotlicffi
+    #   cryptography
 charset-normalizer==3.4.9
     # via requests
 click==8.4.2
@@ -44,10 +53,25 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   click
     #   pytest
     #   tqdm
+cryptography==50.0.0
+    # via
+    #   google-auth
+    #   pyjwt
+    #   rag
 ddgs==9.14.4
     # via rag
+deprecation==2.1.0
+    # via
+    #   postgrest
+    #   storage3
 distro==1.9.0
-    # via langsmith
+    # via
+    #   anthropic
+    #   google-genai
+    #   langsmith
+    #   openai
+docstring-parser==0.18.0
+    # via anthropic
 docx2txt==0.9
     # via rag
 faiss-cpu==1.15.0
@@ -60,6 +84,8 @@ fastavro==1.12.2
     # via cohere
 filelock==3.32.2
     # via huggingface-hub
+filetype==1.2.0
+    # via langchain-google-genai
 flashrank==0.2.10
     # via rag
 flatbuffers==25.12.19
@@ -70,6 +96,10 @@ frozenlist==1.8.0
     #   aiosignal
 fsspec==2026.7.0
     # via huggingface-hub
+google-auth==2.56.2
+    # via google-genai
+google-genai==2.16.0
+    # via langchain-google-genai
 greenlet==3.5.4 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'
     # via sqlalchemy
 h11==0.16.0
@@ -86,12 +116,20 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via
+    #   anthropic
     #   cohere
     #   ddgs
+    #   google-genai
     #   huggingface-hub
     #   langgraph-sdk
     #   langsmith
     #   ollama
+    #   openai
+    #   postgrest
+    #   storage3
+    #   supabase
+    #   supabase-auth
+    #   supabase-functions
 httpx-sse==0.4.3
     # via langchain-community
 huggingface-hub==1.26.0
@@ -106,6 +144,10 @@ idna==3.18
     #   yarl
 iniconfig==2.3.0
     # via pytest
+jiter==0.16.0
+    # via
+    #   anthropic
+    #   openai
 joblib==1.5.3
     # via scikit-learn
 jsonpatch==1.33
@@ -113,6 +155,8 @@ jsonpatch==1.33
 jsonpointer==3.1.1
     # via jsonpatch
 langchain==1.3.14
+    # via rag
+langchain-anthropic==1.5.3
     # via rag
 langchain-classic==1.0.8
     # via langchain-community
@@ -125,12 +169,16 @@ langchain-community==0.4.2
 langchain-core==1.5.3
     # via
     #   langchain
+    #   langchain-anthropic
     #   langchain-classic
     #   langchain-cohere
     #   langchain-community
     #   langchain-experimental
+    #   langchain-google-genai
     #   langchain-ollama
+    #   langchain-openai
     #   langchain-text-splitters
+    #   langchain-xai
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
@@ -138,8 +186,14 @@ langchain-core==1.5.3
     #   rag
 langchain-experimental==0.4.2
     # via rag
+langchain-google-genai==4.3.2
+    # via rag
 langchain-ollama==1.1.0
     # via rag
+langchain-openai==1.4.1
+    # via
+    #   langchain-xai
+    #   rag
 langchain-protocol==0.0.18
     # via
     #   langchain-core
@@ -148,6 +202,8 @@ langchain-text-splitters==1.1.2
     # via
     #   langchain-classic
     #   rag
+langchain-xai==1.3.0
+    # via rag
 langchainhub==0.1.21
     # via rag
 langgraph==1.2.10
@@ -190,6 +246,8 @@ ollama==0.6.2
     # via langchain-ollama
 onnxruntime==1.28.0
     # via flashrank
+openai==2.53.0
+    # via langchain-openai
 orjson==3.11.9
     # via
     #   langgraph-sdk
@@ -198,6 +256,7 @@ ormsgpack==1.12.2
     # via langgraph-checkpoint
 packaging==24.2
     # via
+    #   deprecation
     #   faiss-cpu
     #   huggingface-hub
     #   langchain-core
@@ -207,6 +266,8 @@ packaging==24.2
     #   pytest
 pluggy==1.6.0
     # via pytest
+postgrest==2.31.0
+    # via supabase
 primp==1.3.1
     # via ddgs
 propcache==0.5.2
@@ -215,20 +276,33 @@ propcache==0.5.2
     #   yarl
 protobuf==7.35.1
     # via onnxruntime
-pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'CPython'
+pyasn1==0.6.4
+    # via pyasn1-modules
+pyasn1-modules==0.4.2
+    # via google-auth
+pycparser==3.0 ; implementation_name != 'PyPy'
     # via cffi
 pydantic==2.13.4
     # via
+    #   anthropic
     #   cohere
     #   fastapi
+    #   google-genai
     #   langchain
+    #   langchain-anthropic
     #   langchain-classic
     #   langchain-cohere
     #   langchain-core
+    #   langchain-google-genai
     #   langgraph
     #   langsmith
     #   ollama
+    #   openai
+    #   postgrest
     #   pydantic-settings
+    #   realtime
+    #   storage3
+    #   supabase-auth
 pydantic-core==2.46.4
     # via
     #   cohere
@@ -237,6 +311,10 @@ pydantic-settings==2.14.2
     # via langchain-community
 pygments==2.20.0
     # via pytest
+pyjwt==2.13.0
+    # via
+    #   rag
+    #   supabase-auth
 pypdf==6.14.2
     # via rag
 pytest==9.1.1
@@ -255,14 +333,19 @@ pyyaml==6.0.3
     #   langchain-core
 rank-bm25==0.2.2
     # via rag
+realtime==2.31.0
+    # via supabase
 regex==2026.7.19
     # via tiktoken
 requests==2.34.2
     # via
     #   cohere
     #   flashrank
+    #   google-auth
+    #   google-genai
     #   langchain-classic
     #   langchain-community
+    #   langchain-xai
     #   langchainhub
     #   langsmith
     #   requests-toolbelt
@@ -274,7 +357,11 @@ scikit-learn==1.9.0
 scipy==1.18.0
     # via scikit-learn
 sniffio==1.3.1
-    # via langsmith
+    # via
+    #   anthropic
+    #   google-genai
+    #   langsmith
+    #   openai
 socksio==1.0.0
     # via httpx
 soupsieve==2.9.1
@@ -285,14 +372,27 @@ sqlalchemy==2.0.51
     #   langchain-community
 starlette==1.4.0
     # via fastapi
+storage3==2.31.0
+    # via supabase
+strenum==0.4.15
+    # via supabase-functions
+supabase==2.31.0
+    # via rag
+supabase-auth==2.31.0
+    # via supabase
+supabase-functions==2.31.0
+    # via supabase
 tenacity==9.1.4
     # via
+    #   google-genai
     #   langchain-community
     #   langchain-core
 threadpoolctl==3.6.0
     # via scikit-learn
 tiktoken==0.13.0
-    # via rag
+    # via
+    #   langchain-openai
+    #   rag
 tokenizers==0.23.1
     # via
     #   cohere
@@ -301,6 +401,7 @@ tqdm==4.70.0
     # via
     #   flashrank
     #   huggingface-hub
+    #   openai
 types-pyyaml==6.0.12.20260724
     # via langchain-cohere
 types-requests==2.33.0.20260712
@@ -311,16 +412,20 @@ typing-extensions==4.16.0
     # via
     #   aiohttp
     #   aiosignal
+    #   anthropic
     #   anyio
     #   beautifulsoup4
     #   cohere
     #   fastapi
+    #   google-genai
     #   huggingface-hub
     #   langchain-core
     #   langchain-protocol
     #   langsmith
+    #   openai
     #   pydantic
     #   pydantic-core
+    #   realtime
     #   sqlalchemy
     #   starlette
     #   typing-inspection
@@ -341,13 +446,20 @@ uvicorn==0.52.1
     # via rag
 websockets==15.0.1
     # via
+    #   google-genai
     #   langgraph-sdk
     #   langsmith
+    #   realtime
 xxhash==3.8.1
     # via
     #   langgraph
     #   langsmith
 yarl==1.24.5
-    # via aiohttp
+    # via
+    #   aiohttp
+    #   postgrest
+    #   storage3
+    #   supabase
+    #   supabase-functions
 zstandard==0.25.0
     # via langsmith
