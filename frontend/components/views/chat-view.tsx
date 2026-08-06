@@ -124,7 +124,7 @@ export function ChatView({ session, onUpdate }: Props) {
 
   return (
     <div className="flex h-full gap-4 overflow-hidden p-4 md:p-6">
-      <Card className="relative flex min-w-0 flex-1 flex-col gap-0 overflow-hidden py-0">
+      <Card className="flex min-w-0 flex-1 flex-col gap-0 overflow-hidden py-0">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="relative flex size-1.5 shrink-0">
@@ -139,7 +139,7 @@ export function ChatView({ session, onUpdate }: Props) {
         </header>
 
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-6 px-5 py-7 pb-44 md:px-8">
+          <div className="flex flex-col gap-6 px-5 py-7 md:px-8">
             {session.messages.length === 0 && (
               <div className="flex max-w-3xl gap-3">
                 <Avatar role="assistant" />
@@ -217,7 +217,13 @@ export function ChatView({ session, onUpdate }: Props) {
           </div>
         </ScrollArea>
 
-        <div className="absolute bottom-5 left-1/2 w-[calc(100%-2.5rem)] max-w-3xl -translate-x-1/2">
+        {/* A normal flex child, not absolutely positioned. The composer grows as the
+            textarea does (up to max-h-36), and the scroll area above shrinks to match,
+            so messages can never end up underneath it. The previous version floated
+            this over the list and reserved a fixed pb-44 — which the composer outgrows
+            as soon as the textarea expands. */}
+        <div className="bg-card/80 shrink-0 border-t px-5 pt-3 pb-4 backdrop-blur md:px-8">
+          <div className="mx-auto w-full max-w-3xl">
           <div className="scrollbar-none mb-2.5 flex gap-2 overflow-x-auto">
             {SUGGESTIONS.map((s) => (
               <Button
@@ -265,6 +271,7 @@ export function ChatView({ session, onUpdate }: Props) {
           <p className="text-muted-foreground mt-2 flex items-center justify-center gap-1 text-[11px]">
             <CornerDownLeft className="size-3" /> Enter to send · Shift+Enter for a new line
           </p>
+          </div>
         </div>
       </Card>
 
