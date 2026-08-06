@@ -26,10 +26,10 @@ COPY backend/ backend/
 # (A persistent volume should be mounted here in production)
 RUN mkdir -p /app/workspaces && chmod 777 /app/workspaces
 
-# Create a non-root user for security
-RUN useradd -m appuser && chown -R appuser:appuser /app
-USER appuser
-
+# Railway volumes are mounted as root by default.
+# Running as root ensures the app can write to the persistent /app/workspaces volume.
+# RUN useradd -m appuser && chown -R appuser:appuser /app
+# USER appuser
 # Force Railway to use port 8000
 ENV PORT=8000
 EXPOSE 8000
