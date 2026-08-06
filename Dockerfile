@@ -33,5 +33,5 @@ USER appuser
 # Expose the port Uvicorn will listen on
 EXPOSE 8000
 
-# Start the FastAPI server
-CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the FastAPI server on the dynamically assigned PORT (defaulting to 8000)
+CMD uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}
