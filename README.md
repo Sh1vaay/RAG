@@ -1,14 +1,21 @@
-# 🌌 Aether AI: Conversational RAG Assistant
-
 <div align="center">
 
-![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688.svg)
-![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-FF9900.svg)
-![FAISS](https://img.shields.io/badge/Vector_DB-FAISS-purple.svg)
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+# 🌌 Aether AI: Conversational RAG Assistant
 
-*A production-grade, locally-persisted Corrective & Self-Reflective Conversational RAG pipeline developed to answer complex queries strictly from company documents.*
+![Python Version](https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688.svg?logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-black.svg?logo=next.js&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-FF9900.svg)
+![Vector DB](https://img.shields.io/badge/Vector_DB-FAISS-purple.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+
+*A production-grade, locally-persisted Corrective & Self-Reflective Conversational RAG pipeline developed to answer complex queries strictly from your proprietary documents.*
+
+[Overview](#-project-overview) •
+[Architecture](#-system-architecture) •
+[Features](#-key-features) •
+[Quickstart](#-developer-experience--quickstart) •
+[Documentation](#-technical-documentation)
 
 </div>
 
@@ -16,18 +23,19 @@
 
 ## 🪐 Project Overview
 
+### The Problem
 Standard Retrieval-Augmented Generation (RAG) systems frequently struggle in production due to three core challenges: **retrieval noise** (injecting irrelevant text), **hallucinations** (unsupported model outputs), and **high latency** (processing simple tasks through heavy pipelines).
 
-This project solves these exact issues by employing a highly efficient **Dual-Path processing topology**:
-
-1. **The Fast Path (Low-Latency Bypass)**: Simple inputs, greetings, or direct conversation bypass heavy vector stores entirely using an in-memory embedding-based **Semantic Router**, routing queries to a lightweight conversational agent in milliseconds.
-2. **The Heavy Path (Self-Reflective Agents)**: Complex queries are routed to specialized pipelines where Pydantic Query Analyzers parse constraints. Retrieval combines dense (FAISS) and sparse (BM25) search indices via Reciprocal Rank Fusion (RRF), followed by a multi-agent **LangGraph** self-correcting loop. Final answers are strictly validated against hallucinations.
+### The Solution: Aether AI
+Aether AI solves these exact issues by employing a highly efficient **Dual-Path processing topology**. It dynamically routes user requests based on semantic intent, ensuring that basic greetings bypass heavy retrieval processes (reducing latency), while complex analytical queries run through a rigorous, self-correcting agentic loop to guarantee factual grounding.
 
 ---
 
-## 🏗️ Detailed System Architecture
+## 🏗️ System Architecture
 
-Aether AI is built on a highly modular, multi-layered architecture designed for low latency, strict data grounding, and scalable agentic workflows. 
+Aether AI is built on a highly modular, multi-layered architecture designed for low latency, strict data grounding, and scalable agentic workflows.
+
+### High-Level System Design
 
 ```mermaid
 graph TD
@@ -40,13 +48,13 @@ graph TD
     classDef external fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a,stroke-dasharray: 5 5;
 
     %% 1. Client & API Layer
-    Client[🖥️ Client / Web UI]:::client
+    Client[🖥️ Next.js Web UI]:::client
     API[🚀 FastAPI Backend]:::api
-    Client -->|REST / JSON| API
+    Client <-->|REST / SSE Streaming| API
 
     %% 2. Orchestration & Routing
-    subgraph Routing
-        Router{🔀 Semantic Router}:::router
+    subgraph Routing Engine
+        Router{🔀 Semantic Zero-Shot Router}:::router
         API --> Router
     end
 
@@ -71,7 +79,7 @@ graph TD
         FAISS --> RRF
         BM25 --> RRF
         
-        Reranker[🎯 Flashrank CPU Reranker]:::api
+        Reranker[🎯 Cross-Encoder Reranker]:::api
         RRF --> Reranker
     end
 
@@ -96,177 +104,147 @@ graph TD
     end
 
     %% Final Resolution
-    FastChain --> Output[📤 Final Response]:::api
+    FastChain --> Output[📤 Final Streamed Response]:::api
     Verified --> Output
-    Output --> API
-    
-    %% External Services
-    LLM((OpenAI / Cohere API)):::external
-    FastChain -.- LLM
-    QueryAnalyzer -.- LLM
-    Generator -.- LLM
-    Grader -.- LLM
 ```
 
-### 🔹 Layer-by-Layer Breakdown
-
-1. **Client & API Layer (FastAPI)**: Serves multiple endpoints (`/api/chat`, `/api/upload`, `/api/ingest`, `/api/config`). Handles CORS, payload validation, and serves the static dashboard.
-2. **Orchestration & Routing (Semantic Router)**: Immediately evaluates the query against predefined semantic boundaries. If the query is conversational (e.g., "Hello", "Thanks"), it bypasses the database entirely, reducing API cost and latency to `< 500ms`.
-3. **Query Analysis (Pydantic & LLM)**: For complex queries, a structured LLM extracts constraints (e.g., `publish_year > 2022`, `file_type: PDF`). These constraints are transformed into strict metadata filters for the vector stores.
-4. **Hybrid Retrieval & Reranking Engine**: 
-   - **FAISS (Dense)**: Retrieves documents conceptually related to the query.
-   - **BM25 (Sparse)**: Ensures exact keyword matches (vital for serial numbers or acronyms).
-   - **RRF & Flashrank**: Combines both streams via Reciprocal Rank Fusion and re-ranks them locally on the CPU using cross-encoder models, ensuring only the highest-fidelity context reaches the agent.
-5. **Agentic Workflows (LangGraph)**:
-   - **Corrective RAG (CRAG)**: Generates a draft answer and grades it for hallucinations. If the draft contains ungrounded claims, it dynamically triggers DuckDuckGo web search to gather missing facts, re-writes the context, and tries again.
-   - **Decomposition**: For multi-faceted questions, the graph recursively breaks the problem into sub-questions, answering them sequentially before synthesizing a final response.
-
----
-
-## 🔄 Application Flow (Request Lifecycle)
+### Application Request Flow
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Router as Semantic Router
-    participant DB as Vector Stores
-    participant Agent as LangGraph Agent
-    participant LLM as OpenAI / Cohere
+    participant User as Web Client
+    participant API as FastAPI Router
+    participant SR as Semantic Router
+    participant RAG as Retrieval Engine
+    participant LLM as LLM/LangGraph
+    participant DDG as DuckDuckGo Fallback
+
+    User->>API: POST /api/chat/stream {query}
+    API->>SR: Calculate Embeddings & Route Intent
     
-    User->>Router: What is the Q1 revenue?
-    Router-->>Router: Computes Cosine Similarity
-    
-    alt is Simple Query
-        Router->>LLM: Direct Chat Prompt
-        LLM-->>User: Immediate Response (< 500ms)
-    else is Complex Query
-        Router->>DB: Extract Metadata & Execute Hybrid Search
-        DB-->>Agent: Return Top-K Chunks
+    alt is Fast Route (e.g., Greetings)
+        SR-->>API: Route: Fast
+        API->>LLM: Generate direct response
+        LLM-->>User: Stream response
+    else is Complex Route
+        SR-->>API: Route: RAG / Deep Search
+        API->>RAG: Hybrid Search (FAISS + BM25)
+        RAG->>RAG: Reciprocal Rank Fusion (RRF)
+        RAG->>RAG: Cross-Encoder Reranking
+        RAG-->>API: Top Context Documents
         
-        loop Corrective RAG (CRAG)
-            Agent->>LLM: Generate Answer based on Chunks
-            LLM-->>Agent: Draft Answer
-            Agent->>LLM: Grade Answer for Hallucinations
-            
-            alt Passes Verification
-                LLM-->>User: Fully Grounded Answer
-            else Fails Verification
-                Agent->>Agent: Trigger Web Search Fallback
-                Agent->>DB: Re-write Query & Re-Retrieve
-            end
+        alt Context Irrelevant
+            API->>DDG: Web Search Fallback
+            DDG-->>API: Web Results
         end
+        
+        API->>LLM: LangGraph Agentic Loop (Generate & Grade)
+        LLM-->>User: Stream response with citations
     end
 ```
 
 ---
 
-## ⚡ Key Features
+## ✨ Key Features
 
-* 🔮 **Dual-Routing Switchboard**: Supports embedding-based local **Semantic Routing** (zero-token latency, in-memory) to classify query intent instantly.
-* 🔬 **Pydantic Query Analyzer**: Automatically extracts database metadata filters (e.g., `publish_year`, `file_type`, `page_number`) to build strict queries.
-* 🔀 **Hybrid Retrieval (RRF)**: Combines dense vector retrieval (FAISS) and sparse keyword retrieval (BM25) using Reciprocal Rank Fusion to ensure both semantic capture and exact keyword matches.
-* 🕸️ **LangGraph Multi-Hop Decomposition**: Breaks complex, multi-faceted questions into sequential sub-questions, answering them one-by-one using intermediate context memory.
-* 🌐 **Corrective RAG (CRAG)**: Grades retrieved documents and dynamically triggers DuckDuckGo web search to gather missing facts when local context is insufficient.
-* 🪞 **Double-Guardrail Self-RAG Evaluator**: Uses a two-step validation chain (Hallucination Grader + Answer Relevance Grader) to run verification loops.
-* ✂️ **Semantic Chunking**: Identifies meaning-based boundaries by tracking semantic drift across adjacent sentences, preventing paragraph truncation.
-* 🎯 **Flashrank CPU Reranking**: Re-ranks candidates locally on CPU using optimized quantized cross-encoder models.
+- **Semantic Routing:** Ultrafast intent routing bypassing heavy retrieval for conversational queries.
+- **Hybrid Retrieval & RRF:** Combines BM25 (keyword matching) and FAISS (semantic matching) using Reciprocal Rank Fusion for unparalleled document retrieval accuracy.
+- **Self-Reflective Grading (CRAG):** Employs LangGraph to critique and grade its own answers before returning them to the user, eliminating hallucinations.
+- **Auto-Fallback to Web Search:** If internal documents yield no relevant context, the system safely falls back to DuckDuckGo web search to provide current information.
+- **Dynamic Model Agnosticism:** Swap instantly between local models (Ollama), OpenAI, Anthropic, Gemini, Grok, and Cohere.
+- **Streaming Responses:** Beautiful, ultra-low latency real-time streaming directly to the Next.js UI.
 
 ---
 
-## 📂 Project Structure & Evolution
+## 🛠️ Developer Experience & Quickstart
 
-This repository contains both the final production-ready system and the original prototypes from the first phase of the development lifecycle:
+### Prerequisites
+- Python 3.12+
+- Node.js 18+
+- [uv](https://github.com/astral-sh/uv) (for blazing fast python dependencies)
 
-```text
-├── src/                  # (ACTIVE) Final Aether AI Engine (LangGraph, FAISS, FastAPI)
-├── tests/                # (ACTIVE) Pytest suite for the final pipeline
-├── data/                 # (ACTIVE) Master directory for raw PDFs and CSV files
-├── documents/            # (ACTIVE) Runtime ingestion directory for FAISS vector generation
-├── eval/                 # (ACTIVE) Golden JSON sets for faithfulness evaluation scoring
-├── evaluate.py           # (ACTIVE) Custom evaluation harness to generate accuracy metrics
-├── prototype_v1/         # (ARCHIVE) Original TF-IDF/ChromaDB basic scripts
-│   ├── src/              # Obsolete basic retriever logic
-│   ├── tests/            # Obsolete tests for basic logic
-│   └── scripts/          # Obsolete manual data cleaning scripts
-├── .github/              # CI/CD Workflows (tests active src/ and tests/)
-└── Dockerfile            # Containerization for the active backend
+### Local Development Setup
+
+**1. Clone the repository**
+```bash
+git clone https://github.com/YourUsername/RAG.git
+cd RAG
 ```
 
-> **Note**: The `prototype_v1/` directory contains legacy scripts from early development stages, preserved for historical context.
-
----
-
-## 🛠️ Developer Setup & Experience
-
-### 1. Environment Setup
-
-Clone the repository and install dependencies using `uv` (a much faster pip alternative):
-
+**2. Backend Setup**
 ```bash
-git clone https://github.com/yourusername/aether-ai.git
-cd aether-ai
-
-# Install dependencies
-uv venv
-source .venv/bin/activate
+# Install uv and dependencies
+pip install uv
 uv pip install -r requirements.txt
-```
 
-Create a `.env` file from the example:
-```bash
+# Configure Environment
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+# Edit .env with your LLM keys (OpenAI, Anthropic, Cohere, etc.)
+
+# Start the FastAPI server
+cd backend
+python app.py
+# Server runs on http://localhost:8000
 ```
 
-### 2. Running Data Ingestion
-Populate the FAISS and BM25 vector databases by processing the documents in the `documents/` folder:
-
+**3. Frontend Setup**
 ```bash
-python -m src.ingest
-```
-
-### 3. Starting the Server
-Run the FastAPI backend server:
-
-```bash
-uvicorn src.app:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 4. Running Evaluations & Tests
-To view the accuracy metrics and system faithfulness (verifying the jump from the flawed v1 to the fixed v2 golden set):
-
-```bash
-python evaluate.py
-```
-To run the automated CI pipeline tests:
-```bash
-pytest tests/
+cd frontend
+npm install
+npm run dev
+# Web UI runs on http://localhost:3000
 ```
 
 ---
 
-## 🐳 Docker Deployment
+## 📚 Technical Documentation
 
-For clean isolation, the project includes a production-ready multi-stage `Dockerfile`.
+### Design Decisions
+- **FastAPI over Flask/Django**: Native async support ensures that long-running RAG pipelines and streaming responses do not block the event loop.
+- **Next.js + Tailwind CSS**: Provides a beautiful, snappy frontend that handles SSE (Server-Sent Events) easily for typewriter-like chat streaming.
+- **FAISS + Local Storage**: Used over heavy vector databases (like Pinecone/Qdrant) to allow this project to be completely portable and run locally without cloud dependencies.
+- **LangGraph**: Enables cyclical workflows (unlike standard LangChain chains) allowing the model to correct itself if it detects an error in its own logic.
 
-```bash
-# Build the image
-docker build -t aether-ai .
-
-# Run the container (injecting your API key)
-docker run -p 8000:8000 \
-    -e OPENAI_API_KEY="sk-proj-..." \
-    aether-ai
+### Environment Configuration
+The `.env` file controls your active providers.
+```env
+LLM_PROVIDER=ollama           # ollama | openai | anthropic | gemini | grok | cohere
+EMBEDDING_PROVIDER=ollama     # ollama | openai | gemini | cohere
+ROUTING_METHOD=semantic       # semantic | llm
+RERANKER_PROVIDER=flashrank   # flashrank | cohere
 ```
-*(Note: Docker ignores the archived `prototype_v1` and raw `data` folders to keep the container lightweight and strictly focused on production).*
 
 ---
 
-## 🔒 Security & Quality Assurances
-* **Least Privilege (Docker)**: The `Dockerfile` operates under a non-root user (`appuser`).
-* **Path Traversal Protection**: Uploaded filenames are strictly sanitized before being saved to the file system.
-* **No Leaked Secrets**: All API keys are loaded strictly via `.env` variables and `os.getenv()`.
+## 🛡️ Project Quality Considerations
+
+### Security
+- **Data Privacy**: Local persistence ensures your sensitive company documents never leave your local machine unless you explicitly connect a cloud LLM provider.
+- **Token Verification**: Supabase integration verifies JWKS tokens locally without network overhead.
+- **Sanitization**: Document upload paths are strictly sanitized against path traversal attacks.
+
+### Performance Optimizations
+- **In-Memory Routing**: The semantic router caches route embeddings, achieving intent classification in under `10ms`.
+- **Background Tasks**: Document chunking, indexing, and optional cloud sync are offloaded to FastAPI BackgroundTasks to keep the UI responsive.
+- **Streaming**: Token-by-token streaming via Server-Sent Events (SSE) gives a perceived time-to-first-token (TTFT) of milliseconds.
+
+### Scalability
+- The architecture is inherently stateless. FAISS indexes are tied to authenticated user IDs, allowing horizontal scaling of the backend behind a load balancer.
 
 ---
 
-> **Built with passion to push the boundaries of Local Corrective RAG systems.**
+## 🤝 Contributing
+
+We welcome contributions! Please follow these steps:
+1. Fork the project.
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3. Ensure your code passes linting and type checks.
+4. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+5. Push to the branch (`git push origin feature/AmazingFeature`).
+6. Open a Pull Request.
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.

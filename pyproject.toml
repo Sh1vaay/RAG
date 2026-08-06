@@ -12,7 +12,6 @@ dependencies = [
     "faiss-cpu>=1.9.0",
     "langchain-community>=0.4.2",
     "langchain-experimental>=0.4.2",
-    "langchain-openai>=1.2.2",
     "langchain-text-splitters>=1.1.2",
     "langchainhub>=0.1.21",
     "numpy>=2.4.6",
@@ -23,18 +22,36 @@ dependencies = [
     "scikit-learn>=1.4.0",
     "langchain-cohere>=0.1.0",
     "langgraph>=0.2.0",
-    "duckduckgo-search>=6.1.7",
+    "ddgs>=9.0.0",
     "langsmith>=0.1.0",
     "fastapi>=0.110.0",
     "uvicorn>=0.28.0",
     "python-multipart>=0.0.9",
     "langchain-core>=1.4.2",
+    "langchain-ollama>=1.1.0",
     "pytest>=8.0.0",
+    "langchain-openai>=1.4.1",
+    "langchain-anthropic>=1.5.3",
+    "langchain-google-genai>=4.3.2",
+    "langchain-xai>=1.3.0",
+    "pyjwt[crypto]>=2.13.0",
+    "cryptography>=50.0.0",
+    "supabase>=2.0.0",
 ]
+
+[tool.pytest.ini_options]
+# Only collect the live test suite. `prototype_v1/` is the archived v1, kept
+# deliberately as a record of the project's evolution — its tests import
+# chromadb, which this project no longer depends on, so collecting them
+# aborts the whole run with an ImportError.
+testpaths = ["tests"]
+norecursedirs = ["prototype_v1", "frontend", ".venv", "workspaces", "data"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Same reasoning: the archived prototype is not held to the current lint rules.
+exclude = ["prototype_v1", "frontend", ".venv", "workspaces", "scratch"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

@@ -1,30 +1,34 @@
-# Git
-.git
-.github
+# Virtual environments
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
 
-# Virtual Environments
-.venv
-venv
+# Workspaces and Data (handled via persistent volumes in production)
+workspaces/
+data/
+scratch/
 
-# Secrets and Local configurations
+# Secrets
 .env
 .env.*
 
-# Local Databases and dynamic inputs
-faiss_db/
-documents/*
-!documents/.gitkeep
+# Git and Agents
+.git/
+.gitignore
+.agents/
 
-# Python cache and temporary files
-__pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+# Frontend (deployed separately)
+frontend/
+node_modules/
+.next/
 
-# Internship Prototype & Data files
-prototype_v1/
-data/
-eval/
-evaluate.py
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+*.swp
