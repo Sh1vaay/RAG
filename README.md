@@ -2,12 +2,12 @@
 
 # 🌌 Aether AI: Conversational RAG Assistant
 
-![Python Version](https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688.svg?logo=fastapi&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-14-black.svg?logo=next.js&logoColor=white)
-![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-FF9900.svg)
-![Vector DB](https://img.shields.io/badge/Vector_DB-FAISS-purple.svg)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+[![Python Version](https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black.svg?logo=next.js&logoColor=white)](https://nextjs.org)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-FF9900.svg)](https://python.langchain.com/docs/langgraph)
+[![Vector DB](https://img.shields.io/badge/Vector_DB-FAISS-purple.svg)](https://faiss.ai/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 *A production-grade, locally-persisted Corrective & Self-Reflective Conversational RAG pipeline developed to answer complex queries strictly from your proprietary documents.*
 
@@ -15,7 +15,8 @@
 [Architecture](#-system-architecture) •
 [Features](#-key-features) •
 [Quickstart](#-developer-experience--quickstart) •
-[Documentation](#-technical-documentation)
+[Documentation](#-technical-documentation) •
+[Security & Quality](#️-project-quality--security)
 
 </div>
 
@@ -114,12 +115,14 @@ graph TD
 sequenceDiagram
     participant User as Web Client
     participant API as FastAPI Router
+    participant Auth as Auth & Middleware
     participant SR as Semantic Router
     participant RAG as Retrieval Engine
     participant LLM as LLM/LangGraph
-    participant DDG as DuckDuckGo Fallback
 
     User->>API: POST /api/chat/stream {query}
+    API->>Auth: Verify JWT & Validate CORS
+    Auth-->>API: Authorized
     API->>SR: Calculate Embeddings & Route Intent
     
     alt is Fast Route (e.g., Greetings)
@@ -134,12 +137,11 @@ sequenceDiagram
         RAG-->>API: Top Context Documents
         
         alt Context Irrelevant
-            API->>DDG: Web Search Fallback
-            DDG-->>API: Web Results
+            API->>LLM: Web Search Fallback Triggered
         end
         
         API->>LLM: LangGraph Agentic Loop (Generate & Grade)
-        LLM-->>User: Stream response with citations
+        LLM-->>User: Stream tokenized response with citations
     end
 ```
 
@@ -152,7 +154,7 @@ sequenceDiagram
 - **Self-Reflective Grading (CRAG):** Employs LangGraph to critique and grade its own answers before returning them to the user, eliminating hallucinations.
 - **Auto-Fallback to Web Search:** If internal documents yield no relevant context, the system safely falls back to DuckDuckGo web search to provide current information.
 - **Dynamic Model Agnosticism:** Swap instantly between local models (Ollama), OpenAI, Anthropic, Gemini, Grok, and Cohere.
-- **Streaming Responses:** Beautiful, ultra-low latency real-time streaming directly to the Next.js UI.
+- **Streaming Responses:** Beautiful, ultra-low latency real-time streaming directly to the Next.js UI via Server-Sent Events (SSE).
 
 ---
 
@@ -180,6 +182,7 @@ uv pip install -r requirements.txt
 # Configure Environment
 cp .env.example .env
 # Edit .env with your LLM keys (OpenAI, Anthropic, Cohere, etc.)
+# Note: Set CORS_ALLOWED_ORIGINS to your frontend domain in production.
 
 # Start the FastAPI server
 cd backend
@@ -206,44 +209,45 @@ npm run dev
 - **LangGraph**: Enables cyclical workflows (unlike standard LangChain chains) allowing the model to correct itself if it detects an error in its own logic.
 
 ### Environment Configuration
-The `.env` file controls your active providers.
+The `.env` file controls your active providers and security rules.
 ```env
+# AI Providers
 LLM_PROVIDER=ollama           # ollama | openai | anthropic | gemini | grok | cohere
 EMBEDDING_PROVIDER=ollama     # ollama | openai | gemini | cohere
 ROUTING_METHOD=semantic       # semantic | llm
 RERANKER_PROVIDER=flashrank   # flashrank | cohere
+
+# Security
+CORS_ALLOWED_ORIGINS=http://localhost:3000  # Strict origin checking
 ```
+
+### API Documentation
+API documentation is automatically generated and accessible via Swagger UI. Once the backend is running, navigate to:
+- **Swagger UI:** `http://localhost:8000/docs`
+- **ReDoc:** `http://localhost:8000/redoc`
 
 ---
 
-## 🛡️ Project Quality Considerations
+## 🛡️ Project Quality & Security
 
-### Security
+### Security Hardening
+- **Bulletproof File Uploads**: Uploads enforce strict file extension allowlists, MIME-type checking, and Magic Bytes signature validation. Filenames are regenerated using UUIDs to eliminate Path Traversal risks.
+- **Strict CORS Policies**: Pre-configured with strict CORS logic that rejects unauthorized cross-origin requests and wildcard credentials.
 - **Data Privacy**: Local persistence ensures your sensitive company documents never leave your local machine unless you explicitly connect a cloud LLM provider.
-- **Token Verification**: Supabase integration verifies JWKS tokens locally without network overhead.
-- **Sanitization**: Document upload paths are strictly sanitized against path traversal attacks.
 
 ### Performance Optimizations
 - **In-Memory Routing**: The semantic router caches route embeddings, achieving intent classification in under `10ms`.
 - **Background Tasks**: Document chunking, indexing, and optional cloud sync are offloaded to FastAPI BackgroundTasks to keep the UI responsive.
-- **Streaming**: Token-by-token streaming via Server-Sent Events (SSE) gives a perceived time-to-first-token (TTFT) of milliseconds.
+- **Streaming (SSE)**: Token-by-token streaming gives a perceived time-to-first-token (TTFT) of milliseconds.
 
-### Scalability
-- The architecture is inherently stateless. FAISS indexes are tied to authenticated user IDs, allowing horizontal scaling of the backend behind a load balancer.
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-1. Fork the project.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. Ensure your code passes linting and type checks.
-4. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-5. Push to the branch (`git push origin feature/AmazingFeature`).
-6. Open a Pull Request.
+### Scalability Considerations
+- The backend architecture is inherently stateless. 
+- FAISS indexes are strictly tied to authenticated user IDs, meaning multiple workers can process multiple users concurrently.
+- Can be easily deployed as a Docker container orchestrating via Kubernetes or serverless containers.
 
 ---
+
+
 
 ## 📄 License
 

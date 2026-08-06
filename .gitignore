@@ -48,7 +48,7 @@ test_imports.log
 # Development planning and resume points
 RESUME_POINTS.md
 IMPLEMENTATION_DETAILS.md
-
+final_review_report.md
 # Note: data/, eval/ and prototype_v1/ are intentionally tracked for internship
 # presentation. Do not ignore them. prototype_v1/ is excluded from pytest and
 # ruff in pyproject.toml instead, so it stays as a record without breaking CI.
