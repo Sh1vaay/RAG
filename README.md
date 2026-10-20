@@ -169,7 +169,7 @@ sequenceDiagram
 
 **1. Clone the repository**
 ```bash
-git clone https://github.com/YourUsername/RAG.git
+git clone https://github.com/Sh1vaay/RAG.git
 cd RAG
 ```
 
